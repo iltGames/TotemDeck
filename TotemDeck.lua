@@ -221,21 +221,21 @@ local function CreateTimerBar(parent, element, index)
     statusBar:SetValue(1)
     bar.statusBar = statusBar
 
-    -- Icon
-    local icon = bar:CreateTexture(nil, "ARTWORK")
+    -- Icon (on statusBar so it renders above the progress color)
+    local icon = statusBar:CreateTexture(nil, "OVERLAY")
     icon:SetSize(18, 18)
-    icon:SetPoint("LEFT", 2, 0)
+    icon:SetPoint("LEFT", 0, 0)
     bar.icon = icon
 
-    -- Text
-    local text = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    -- Text (on statusBar so it renders above the progress color)
+    local text = statusBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     text:SetPoint("LEFT", icon, "RIGHT", 4, 0)
     text:SetTextColor(1, 1, 1)
     bar.text = text
 
-    -- Time text
-    local timeText = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    timeText:SetPoint("RIGHT", -4, 0)
+    -- Time text (on statusBar so it renders above the progress color)
+    local timeText = statusBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    timeText:SetPoint("RIGHT", -2, 0)
     timeText:SetTextColor(1, 1, 1)
     bar.timeText = timeText
 
@@ -339,8 +339,6 @@ end
 
 -- Show popup for an element
 local function ShowPopup(element, anchorButton)
-    if InCombatLockdown() then return end
-
     popupElement = element
     popupVisible = true
 
@@ -369,17 +367,9 @@ local function ShowPopup(element, anchorButton)
         end
     end
 
-    -- Create/show buttons for this element
-    if not popupButtons[element] then
-        popupButtons[element] = {}
-    end
-
+    -- Position and show buttons for this element (buttons are pre-created)
     for i, totemData in ipairs(totems) do
         local btn = popupButtons[element][i]
-        if not btn then
-            btn = CreatePopupButton(popupFrame, totemData, element, i)
-            popupButtons[element][i] = btn
-        end
 
         local col = (i - 1) % 4
         local row = math.floor((i - 1) / 4)
@@ -474,6 +464,17 @@ local function CreatePopupFrame()
     end)
 
     popupFrame:Hide()
+
+    -- Pre-create all popup buttons for each element (required for combat use)
+    for _, element in ipairs(ELEMENT_ORDER) do
+        popupButtons[element] = {}
+        local totems = TOTEMS[element]
+        for i, totemData in ipairs(totems) do
+            local btn = CreatePopupButton(popupFrame, totemData, element, i)
+            btn:Hide()
+            popupButtons[element][i] = btn
+        end
+    end
 end
 
 -- Create the action bar with active totem buttons
