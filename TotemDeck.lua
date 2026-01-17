@@ -77,6 +77,7 @@ local timerFrame, actionBarFrame, popupFrame
 local timerBars = {}
 local activeTotemButtons = {}
 local popupButtons = {}
+local popupContainers = {} -- Container frames for each element (non-secure, can show/hide in combat)
 local buttonCounter = 0
 local popupVisible = false
 local popupElement = nil
@@ -221,15 +222,9 @@ local function CreateTimerBar(parent, element, index)
     statusBar:SetValue(1)
     bar.statusBar = statusBar
 
-    -- Icon (on statusBar so it renders above the progress color)
-    local icon = statusBar:CreateTexture(nil, "OVERLAY")
-    icon:SetSize(18, 18)
-    icon:SetPoint("LEFT", 0, 0)
-    bar.icon = icon
-
     -- Text (on statusBar so it renders above the progress color)
     local text = statusBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    text:SetPoint("LEFT", icon, "RIGHT", 4, 0)
+    text:SetPoint("LEFT", 4, 0)
     text:SetTextColor(1, 1, 1)
     bar.text = text
 
@@ -267,30 +262,35 @@ local function CreatePopupButton(parent, totemData, element, index)
     buttonCounter = buttonCounter + 1
     local btnName = "TotemDeckPopupButton" .. buttonCounter
 
-    local btn = CreateFrame("Button", btnName, parent, "SecureActionButtonTemplate")
-    btn:SetSize(36, 36)
-
-    -- Background
-    btn.bg = btn:CreateTexture(nil, "BACKGROUND")
-    btn.bg:SetAllPoints()
-    btn.bg:SetColorTexture(0.1, 0.1, 0.1, 0.9)
-
-    -- Border
-    btn.border = CreateFrame("Frame", nil, btn, "BackdropTemplate")
-    btn.border:SetPoint("TOPLEFT", -1, 1)
-    btn.border:SetPoint("BOTTOMRIGHT", 1, -1)
-    btn.border:SetBackdrop({
+    -- Create a visual frame (non-secure) first
+    local visual = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    visual:SetSize(36, 36)
+    visual:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         edgeSize = 1,
     })
-    btn.border:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
-    btn.border:EnableMouse(false)
+    visual:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+    visual:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
 
-    -- Icon
-    local icon = btn:CreateTexture(nil, "ARTWORK")
+    -- Icon on the visual frame (non-secure, should always render)
+    local icon = visual:CreateTexture(nil, "ARTWORK")
     icon:SetSize(32, 32)
     icon:SetPoint("CENTER")
-    icon:SetTexture(totemData.icon)
+    local spellIcon = GetSpellTexture(totemData.name)
+    icon:SetTexture(spellIcon or totemData.icon)
+    icon:Show()
+    visual.icon = icon
+
+    -- Create the secure button on top of visual
+    local btn = CreateFrame("Button", btnName, parent, "SecureActionButtonTemplate")
+    btn:SetSize(36, 36)
+    btn:SetAllPoints(visual)
+    btn:SetFrameLevel(visual:GetFrameLevel() + 1)
+
+    -- Store references
+    btn.visual = visual
+    btn.border = visual -- Use visual as border (has SetBackdropBorderColor)
     btn.icon = icon
 
     -- Store data
@@ -330,7 +330,13 @@ local function CreatePopupButton(parent, totemData, element, index)
     end)
 
     btn:SetScript("OnLeave", function(self)
-        self.border:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+        -- Restore green border if this is the active totem, otherwise gray
+        local activeKey = "active" .. self.element
+        if TotemDeckDB[activeKey] == self.totemName then
+            self.border:SetBackdropBorderColor(0, 1, 0, 1)
+        else
+            self.border:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+        end
         GameTooltip:Hide()
     end)
 
@@ -360,38 +366,30 @@ local function ShowPopup(element, anchorButton)
         timerFrame:Hide()
     end
 
-    -- Hide all existing popup buttons from other elements
-    for elem, buttons in pairs(popupButtons) do
-        for _, btn in ipairs(buttons) do
-            btn:Hide()
+    -- Show current element, hide others with alpha (frame level ensures clicks go to active)
+    for elem, container in pairs(popupContainers) do
+        if elem == element then
+            container:SetAlpha(1)
+            container:SetFrameLevel(popupFrame:GetFrameLevel() + 100)
+            container:SetSize(200, rows * 40 + 10)
+        else
+            container:SetAlpha(0)
+            container:SetFrameLevel(popupFrame:GetFrameLevel() + 1)
         end
     end
 
-    -- Position and show buttons for this element (buttons are pre-created)
+    -- Update active totem highlights (border frames are non-secure)
     for i, totemData in ipairs(totems) do
         local btn = popupButtons[element][i]
-
-        local col = (i - 1) % 4
-        local row = math.floor((i - 1) / 4)
-        -- Center buttons in the 200px wide popup
-        local totalCols = math.min(numTotems - (row * 4), 4)
-        local rowWidth = totalCols * 40
-        local startX = (200 - rowWidth) / 2
-        btn:ClearAllPoints()
-        btn:SetPoint("TOPLEFT", startX + col * 40, -5 - row * 40)
-
-        -- Highlight active totem
         local activeKey = "active" .. element
         if TotemDeckDB[activeKey] == totemData.name then
             btn.border:SetBackdropBorderColor(0, 1, 0, 1)
         else
             btn.border:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
         end
-
-        btn:Show()
     end
 
-    popupFrame:Show()
+    popupFrame:SetAlpha(1)
 end
 
 -- Forward declaration for UpdateTimers
@@ -402,7 +400,7 @@ local function HidePopup()
     popupVisible = false
     popupElement = nil
     if popupFrame then
-        popupFrame:Hide()
+        popupFrame:SetAlpha(0)
     end
     GameTooltip:Hide()
     -- Show timer bars again
@@ -413,18 +411,22 @@ end
 
 -- Check if mouse is over popup or anchor button
 local function IsMouseOverPopupArea()
-    -- Check popup frame
-    if popupFrame and popupFrame:IsShown() and popupFrame:IsMouseOver() then
+    -- Check popup frame (use popupVisible instead of IsShown since we use alpha)
+    if popupFrame and popupVisible and popupFrame:IsMouseOver() then
         return true
     end
     -- Check anchor button
     if popupElement and activeTotemButtons[popupElement] and activeTotemButtons[popupElement]:IsMouseOver() then
         return true
     end
-    -- Check individual popup buttons
+    -- Check element container
+    if popupElement and popupContainers[popupElement] and popupContainers[popupElement]:IsMouseOver() then
+        return true
+    end
+    -- Check individual popup buttons (they're always "shown", visibility controlled by container alpha)
     if popupElement and popupButtons[popupElement] then
         for _, btn in ipairs(popupButtons[popupElement]) do
-            if btn:IsShown() and btn:IsMouseOver() then
+            if btn:IsMouseOver() then
                 return true
             end
         end
@@ -463,18 +465,59 @@ local function CreatePopupFrame()
         end
     end)
 
-    popupFrame:Hide()
+    -- Keep frame shown but invisible via alpha (allows combat show/hide)
+    popupFrame:Show()
+    popupFrame:SetAlpha(0)
 
-    -- Pre-create all popup buttons for each element (required for combat use)
+    -- Pre-create container frames and buttons for each element (required for combat use)
+    -- Use alpha for visibility instead of Show/Hide (works in combat with secure children)
     for _, element in ipairs(ELEMENT_ORDER) do
+        -- Create non-secure container for this element
+        local container = CreateFrame("Frame", nil, popupFrame)
+        container:SetAllPoints(popupFrame)
+        container:SetSize(200, 200)
+        container:SetAlpha(0) -- Start hidden
+        container:SetFrameLevel(popupFrame:GetFrameLevel() + 1) -- Initialize frame level
+        container:Show()
+        popupContainers[element] = container
+
         popupButtons[element] = {}
         local totems = TOTEMS[element]
+        local numTotems = #totems
+
         for i, totemData in ipairs(totems) do
-            local btn = CreatePopupButton(popupFrame, totemData, element, i)
-            btn:Hide()
+            -- Parent buttons to the container (not directly to popupFrame)
+            local btn = CreatePopupButton(container, totemData, element, i)
+
+            -- Pre-position visual frame at creation time (btn follows via SetAllPoints)
+            local col = (i - 1) % 4
+            local row = math.floor((i - 1) / 4)
+            local totalCols = math.min(numTotems - (row * 4), 4)
+            local rowWidth = totalCols * 40
+            local startX = (200 - rowWidth) / 2
+            btn.visual:SetPoint("TOPLEFT", container, "TOPLEFT", startX + col * 40, -5 - row * 40)
+
+            -- Show both visual and button
+            btn.visual:Show()
+            btn:Show()
             popupButtons[element][i] = btn
         end
+
     end
+
+    -- Pre-render all containers so they work in combat (briefly show then hide)
+    popupFrame:SetAlpha(1)
+    for _, container in pairs(popupContainers) do
+        container:SetAlpha(1)
+        container:SetFrameLevel(popupFrame:GetFrameLevel() + 100)
+    end
+    C_Timer.After(0.01, function()
+        popupFrame:SetAlpha(0)
+        for _, container in pairs(popupContainers) do
+            container:SetAlpha(0)
+            container:SetFrameLevel(popupFrame:GetFrameLevel() + 1)
+        end
+    end)
 end
 
 -- Create the action bar with active totem buttons
@@ -641,13 +684,6 @@ UpdateTimers = function()
                     bar.text:SetText(totemName:gsub(" Totem", ""))
                     bar.timeText:SetText(FormatTime(math.floor(remaining)))
 
-                    -- Find icon
-                    for _, totem in ipairs(TOTEMS[element]) do
-                        if totem.name == totemName then
-                            bar.icon:SetTexture(totem.icon)
-                            break
-                        end
-                    end
                 else
                     bar:Hide()
                 end
