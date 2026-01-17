@@ -73,11 +73,12 @@ local TOTEM_SLOTS = {
 }
 
 -- UI elements
-local timerFrame, actionBarFrame, popupFrame
+local timerFrame, actionBarFrame, popupFrame, popupBlocker
 local timerBars = {}
 local activeTotemButtons = {}
 local popupButtons = {}
 local popupContainers = {} -- Container frames for each element (non-secure, can show/hide in combat)
+local popupContainerBlockers = {} -- Blocker frame per container to prevent clicks on hidden buttons
 local buttonCounter = 0
 local popupVisible = false
 local popupElement = nil
@@ -356,8 +357,6 @@ local function ShowPopup(element, anchorButton)
     local rows = math.ceil(numTotems / 4)
 
     popupFrame:SetSize(200, rows * 40 + 10)
-    popupFrame:ClearAllPoints()
-    popupFrame:SetPoint("BOTTOM", actionBarFrame, "TOP", 0, 0) -- Aligned with action bar
     popupFrame:SetBackdropBorderColor(color.r, color.g, color.b, 1)
     popupHideDelay = 0
 
@@ -366,15 +365,30 @@ local function ShowPopup(element, anchorButton)
         timerFrame:Hide()
     end
 
-    -- Show current element, hide others with alpha (frame level ensures clicks go to active)
+    -- Lower main blocker so clicks reach buttons
+    if popupBlocker then
+        popupBlocker:SetFrameLevel(popupFrame:GetFrameLevel() + 1)
+    end
+
+    -- Show current element, hide others with alpha
+    -- Each hidden container's blocker is raised to block its buttons
     for elem, container in pairs(popupContainers) do
+        local blocker = popupContainerBlockers[elem]
         if elem == element then
             container:SetAlpha(1)
-            container:SetFrameLevel(popupFrame:GetFrameLevel() + 100)
+            container:SetFrameLevel(popupFrame:GetFrameLevel() + 50)
             container:SetSize(200, rows * 40 + 10)
+            -- Lower this container's blocker below its buttons
+            if blocker then
+                blocker:SetFrameLevel(popupFrame:GetFrameLevel() + 49)
+            end
         else
             container:SetAlpha(0)
-            container:SetFrameLevel(popupFrame:GetFrameLevel() + 1)
+            container:SetFrameLevel(popupFrame:GetFrameLevel() + 10)
+            -- Raise this container's blocker above its buttons to block clicks
+            if blocker then
+                blocker:SetFrameLevel(popupFrame:GetFrameLevel() + 11)
+            end
         end
     end
 
@@ -401,6 +415,14 @@ local function HidePopup()
     popupElement = nil
     if popupFrame then
         popupFrame:SetAlpha(0)
+        -- Raise main blocker to intercept clicks on invisible buttons
+        if popupBlocker then
+            popupBlocker:SetFrameLevel(popupFrame:GetFrameLevel() + 200)
+        end
+        -- Raise all container blockers too
+        for _, blocker in pairs(popupContainerBlockers) do
+            blocker:SetFrameLevel(popupFrame:GetFrameLevel() + 11)
+        end
     end
     GameTooltip:Hide()
     -- Show timer bars again
@@ -465,9 +487,16 @@ local function CreatePopupFrame()
         end
     end)
 
-    -- Keep frame shown but invisible via alpha (allows combat show/hide)
+    -- Keep frame shown but invisible (position will be set after actionBarFrame is created)
     popupFrame:Show()
     popupFrame:SetAlpha(0)
+
+    -- Create blocker frame to intercept clicks when popup is hidden
+    popupBlocker = CreateFrame("Frame", nil, popupFrame)
+    popupBlocker:SetAllPoints(popupFrame)
+    popupBlocker:EnableMouse(true) -- Intercepts all mouse clicks
+    popupBlocker:SetFrameLevel(popupFrame:GetFrameLevel() + 200) -- Start high to block
+    popupBlocker:Show()
 
     -- Pre-create container frames and buttons for each element (required for combat use)
     -- Use alpha for visibility instead of Show/Hide (works in combat with secure children)
@@ -477,7 +506,7 @@ local function CreatePopupFrame()
         container:SetAllPoints(popupFrame)
         container:SetSize(200, 200)
         container:SetAlpha(0) -- Start hidden
-        container:SetFrameLevel(popupFrame:GetFrameLevel() + 1) -- Initialize frame level
+        container:SetFrameLevel(popupFrame:GetFrameLevel() + 10) -- Initialize frame level
         container:Show()
         popupContainers[element] = container
 
@@ -503,19 +532,36 @@ local function CreatePopupFrame()
             popupButtons[element][i] = btn
         end
 
+        -- Create blocker for this container (blocks clicks on hidden buttons)
+        local containerBlocker = CreateFrame("Frame", nil, container)
+        containerBlocker:SetAllPoints(container)
+        containerBlocker:EnableMouse(true)
+        containerBlocker:SetFrameLevel(popupFrame:GetFrameLevel() + 11) -- Start above buttons to block
+        containerBlocker:Show()
+        popupContainerBlockers[element] = containerBlocker
+
     end
 
     -- Pre-render all containers so they work in combat (briefly show then hide)
+    -- Position will be set properly after actionBarFrame is created
     popupFrame:SetAlpha(1)
-    for _, container in pairs(popupContainers) do
+    for elem, container in pairs(popupContainers) do
         container:SetAlpha(1)
-        container:SetFrameLevel(popupFrame:GetFrameLevel() + 100)
+        container:SetFrameLevel(popupFrame:GetFrameLevel() + 50)
+        -- Lower blockers during pre-render
+        if popupContainerBlockers[elem] then
+            popupContainerBlockers[elem]:SetFrameLevel(popupFrame:GetFrameLevel() + 49)
+        end
     end
     C_Timer.After(0.01, function()
         popupFrame:SetAlpha(0)
-        for _, container in pairs(popupContainers) do
+        for elem, container in pairs(popupContainers) do
             container:SetAlpha(0)
-            container:SetFrameLevel(popupFrame:GetFrameLevel() + 1)
+            container:SetFrameLevel(popupFrame:GetFrameLevel() + 10)
+            -- Raise blockers after pre-render
+            if popupContainerBlockers[elem] then
+                popupContainerBlockers[elem]:SetFrameLevel(popupFrame:GetFrameLevel() + 11)
+            end
         end
     end)
 end
@@ -745,6 +791,10 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         CreatePopupFrame()
         CreateActionBarFrame()
         CreateTimerFrame()
+
+        -- Position popup frame above action bar (must be done after actionBarFrame exists)
+        popupFrame:ClearAllPoints()
+        popupFrame:SetPoint("BOTTOM", actionBarFrame, "TOP", 0, 0)
 
         -- Create macros after a short delay (needs UI to be ready)
         C_Timer.After(2, function()
