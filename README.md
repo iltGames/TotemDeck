@@ -1,7 +1,5 @@
 # TotemDeck
 
-**Pick your totems like cards from a deck.**
-
 A lightweight shaman totem management addon for WoW Classic TBC. Hover over any element to see all available totems, then cast or set your active totem with a single click.
 
 ## Features
@@ -50,3 +48,4 @@ The addon creates 4 macros you can place on your action bars:
 ## License
 
 MIT
+
