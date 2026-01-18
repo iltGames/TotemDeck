@@ -6,12 +6,14 @@ A lightweight shaman totem management addon for WoW Classic TBC. Hover over any 
 
 - **Compact totem bar** - 4 buttons, one for each element (Earth, Fire, Water, Air)
 - **Hover popup** - Mouse over any element to see all totems of that type
+- **Always show option** - Optionally keep popup bars visible at all times
 - **Smart filtering** - Only shows totems you have trained
 - **Quick casting** - Left-click any totem to cast it instantly
 - **Quick dismiss** - Right-click the main element button to dismiss that totem
-- **Active totem selection** - Right-click a popup totem to set it as your preferred totem for that element
+- **Active totem selection** - Right-click a popup totem to set it as your preferred totem for that element (works in combat)
 - **Totem timers** - Duration bars show remaining time on active totems
-- **Custom totem order** - Rearrange totems in any order you prefer via the config window
+- **Custom element order** - Rearrange element groups (Earth, Fire, Water, Air) in any order
+- **Custom totem order** - Rearrange totems within each element via the config window
 - **Full configuration UI** - Tabbed config window with Layout and Totem Order settings
 - **Quick options menu** - Alt+click the bar for fast access to common settings
 - **Macro support** - Creates macros (TDEarth, TDFire, TDWater, TDAir) that cast your active totems
@@ -40,11 +42,13 @@ Open with `/td config` or via "Show Full Config..." in the quick menu.
 - Timer Position (Above/Below/Left/Right)
 - Show Timers toggle
 - Lock Bar Position toggle
+- Always Show Popup toggle
 - Recreate Macros button
 
 **Totem Order Tab:**
-- Drag totems up/down to reorder them within each element
-- Click "Apply" to update the popup display
+- Element Order - Rearrange the element groups using arrow buttons
+- Totem Order - Reorder totems within each element using up/down buttons
+- Click "Apply" to update the display
 - Click "Reset to Default" to restore original order
 
 ### Quick Options Menu
@@ -53,6 +57,7 @@ Alt+click the bar to access:
 - Timer position
 - Show/hide timers
 - Lock/unlock position
+- Always show popup
 - Show full config
 - Recreate macros
 

@@ -14,6 +14,8 @@ local defaults = {
     locked = false,
     popupDirection = "UP", -- UP, DOWN, LEFT, RIGHT
     timerPosition = "ABOVE", -- ABOVE, BELOW, LEFT, RIGHT
+    alwaysShowPopup = false, -- Always show popup bars instead of on hover
+    elementOrder = { "Earth", "Fire", "Water", "Air" }, -- Order of element groups
     totemOrder = { -- Custom totem order per element (empty = use default)
         Earth = {},
         Fire = {},
@@ -86,7 +88,6 @@ local timerBars = {}
 local activeTotemButtons = {}
 local popupButtons = {}
 local popupContainers = {} -- Container frames for each element, anchored to main bar buttons
-local popupBlockers = {} -- Blocker frames to prevent clicks when hidden
 local buttonCounter = 0
 local popupVisible = false
 local popupHideDelay = 0
@@ -110,6 +111,14 @@ local function GetTotemData(totemName)
         end
     end
     return nil, nil
+end
+
+-- Get element order (saved or default)
+local function GetElementOrder()
+    if TotemDeckDB and TotemDeckDB.elementOrder then
+        return TotemDeckDB.elementOrder
+    end
+    return ELEMENT_ORDER
 end
 
 -- Check if a totem spell is trained
@@ -225,22 +234,15 @@ local function UpdateTotemMacro(element)
     EditMacro(macroIndex, macroName, macroIcon, "/cast " .. totemName)
 end
 
+-- Queue for pending updates after combat
+local pendingActiveUpdates = {}
+
 -- Set active totem for an element
 local function SetActiveTotem(element, totemName)
-    if InCombatLockdown() then
-        return
-    end
-
     local activeKey = "active" .. element
     TotemDeckDB[activeKey] = totemName
 
-    -- Update active totem button
-    UpdateActiveTotemButton(element)
-
-    -- Update macro
-    UpdateTotemMacro(element)
-
-    -- Update popup buttons if visible
+    -- Update popup buttons immediately (visual only, not protected)
     if popupButtons[element] then
         for _, btn in ipairs(popupButtons[element]) do
             if btn.totemName == totemName then
@@ -250,6 +252,18 @@ local function SetActiveTotem(element, totemName)
             end
         end
     end
+
+    -- Secure updates (SetAttribute, EditMacro) must wait until out of combat
+    if InCombatLockdown() then
+        pendingActiveUpdates[element] = true
+        return
+    end
+
+    -- Update active totem button (secure)
+    UpdateActiveTotemButton(element)
+
+    -- Update macro
+    UpdateTotemMacro(element)
 end
 
 -- Create timer bar
@@ -371,6 +385,11 @@ local function CreatePopupButton(parent, totemData, element, index)
 
     -- Tooltip (to the right of the button)
     btn:SetScript("OnEnter", function(self)
+        -- Only respond if popup is already visible (user hovered main bar first)
+        -- This prevents invisible buttons from triggering popup during combat
+        if not popupVisible then
+            return
+        end
         -- Highlight entire column for this element
         ShowPopup(self.element)
         -- Then highlight this specific button
@@ -412,17 +431,14 @@ ShowPopup = function(hoveredElement)
     popupVisible = true
     popupHideDelay = 0
 
-    -- Hide all blockers so buttons are clickable
-    for _, blocker in pairs(popupBlockers) do
-        blocker:Hide()
-    end
-
     -- Show all element columns, highlight the hovered one
     for elem, container in pairs(popupContainers) do
         local color = ELEMENT_COLORS[elem]
+        if not InCombatLockdown() then
+            container:Show() -- Only call Show() outside combat (secure frame restriction)
+        end
         container:SetAlpha(1)
         container:SetFrameStrata("DIALOG") -- Use DIALOG so GameTooltip (TOOLTIP strata) is above
-        container:Show()
 
         -- Highlight hovered element, dim others
         if elem == hoveredElement then
@@ -454,17 +470,35 @@ end
 -- Forward declaration for UpdateTimers
 local UpdateTimers
 
--- Hide all popup columns
+-- Hide all popup columns (or just dim them if always show is enabled)
 local function HidePopup()
+    -- If always show is enabled, just dim all columns instead of hiding
+    if TotemDeckDB.alwaysShowPopup then
+        for elem, container in pairs(popupContainers) do
+            local color = ELEMENT_COLORS[elem]
+            container:SetBackdropBorderColor(color.r, color.g, color.b, 0.5)
+            -- Dim all buttons
+            for _, btn in ipairs(popupButtons[elem] or {}) do
+                local activeKey = "active" .. elem
+                if TotemDeckDB[activeKey] == btn.totemName then
+                    btn.border:SetBackdropBorderColor(0, 0.8, 0, 0.8)
+                else
+                    btn.border:SetBackdropBorderColor(color.r * 0.6, color.g * 0.6, color.b * 0.6, 0.6)
+                end
+            end
+        end
+        return
+    end
     popupVisible = false
     for _, container in pairs(popupContainers) do
-        container:SetAlpha(0)
-        -- Lower strata so we don't block other UI when hidden
-        container:SetFrameStrata("BACKGROUND")
-    end
-    -- Show all blockers to intercept clicks on hidden buttons
-    for _, blocker in pairs(popupBlockers) do
-        blocker:Show()
+        if InCombatLockdown() then
+            -- In combat: can't Hide() frames with secure children, use alpha instead
+            container:SetAlpha(0)
+            container:SetFrameStrata("BACKGROUND")
+        else
+            -- Out of combat: actually hide for clean mouse passthrough
+            container:Hide()
+        end
     end
     GameTooltip:Hide()
     -- Show timer bars again
@@ -585,15 +619,6 @@ local function CreatePopupColumn(element, anchorButton)
         btn:Show()
         popupButtons[element][i] = btn
     end
-
-    -- Create blocker frame (non-secure, can Show/Hide in combat)
-    -- Blocks clicks on buttons when popup is hidden
-    local blocker = CreateFrame("Frame", nil, container)
-    blocker:SetAllPoints(container)
-    blocker:SetFrameLevel(container:GetFrameLevel() + 100) -- Above all buttons
-    blocker:EnableMouse(true) -- Intercepts mouse events
-    blocker:Show() -- Start shown (popup starts hidden)
-    popupBlockers[element] = blocker
 
     return container
 end
@@ -876,7 +901,7 @@ local function CreateConfigWindow()
     end)
 
     -- Options
-    local optionsSection = CreateLayoutSection(layoutContent, "Options", -160, 90)
+    local optionsSection = CreateLayoutSection(layoutContent, "Options", -160, 115)
 
     local showTimersCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
     showTimersCheck:SetPoint("TOPLEFT", 10, -28)
@@ -905,6 +930,32 @@ local function CreateConfigWindow()
     lockPosLabel:SetText("Lock Bar Position")
     frame.lockPosCheck = lockPosCheck
 
+    local alwaysShowCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
+    alwaysShowCheck:SetPoint("TOPLEFT", 10, -78)
+    alwaysShowCheck:SetChecked(TotemDeckDB.alwaysShowPopup)
+    alwaysShowCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.alwaysShowPopup = self:GetChecked()
+        if TotemDeckDB.alwaysShowPopup then
+            -- Show popups immediately
+            ShowPopup(GetElementOrder()[1])
+        else
+            -- Hide popups
+            popupVisible = false
+            for _, container in pairs(popupContainers) do
+                if not InCombatLockdown() then
+                    container:Hide()
+                else
+                    container:SetAlpha(0)
+                    container:SetFrameStrata("BACKGROUND")
+                end
+            end
+        end
+    end)
+    local alwaysShowLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    alwaysShowLabel:SetPoint("LEFT", alwaysShowCheck, "RIGHT", 4, 0)
+    alwaysShowLabel:SetText("Always Show Popup")
+    frame.alwaysShowCheck = alwaysShowCheck
+
     local macrosBtn = CreateFrame("Button", nil, optionsSection, "UIPanelButtonTemplate")
     macrosBtn:SetSize(120, 22)
     macrosBtn:SetPoint("TOPRIGHT", optionsSection, "TOPRIGHT", -10, -30)
@@ -921,9 +972,83 @@ local function CreateConfigWindow()
     orderingContent:SetAllPoints()
     tabContent["ordering"] = orderingContent
 
+    -- Element Order Section (at the top)
+    local elementOrderSection = CreateFrame("Frame", nil, orderingContent, "BackdropTemplate")
+    elementOrderSection:SetSize(380, 50)
+    elementOrderSection:SetPoint("TOP", orderingContent, "TOP", 0, 0)
+    elementOrderSection:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    elementOrderSection:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
+    elementOrderSection:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+
+    local elementOrderLabel = elementOrderSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    elementOrderLabel:SetPoint("TOP", 0, -4)
+    elementOrderLabel:SetText("Element Order")
+
+    local elementOrderButtons = {}
+    local function RefreshElementOrderButtons()
+        local order = GetElementOrder()
+        for i, btn in ipairs(elementOrderButtons) do
+            local element = order[i]
+            local color = ELEMENT_COLORS[element]
+            btn.element = element
+            btn.text:SetText(element:sub(1, 1))
+            btn.text:SetTextColor(color.r, color.g, color.b)
+            btn:SetBackdropBorderColor(color.r, color.g, color.b, 1)
+            btn.leftBtn:SetEnabled(i > 1)
+            btn.rightBtn:SetEnabled(i < 4)
+        end
+    end
+
+    local function SwapElements(idx1, idx2)
+        local order = TotemDeckDB.elementOrder
+        order[idx1], order[idx2] = order[idx2], order[idx1]
+        RefreshElementOrderButtons()
+    end
+
+    for i = 1, 4 do
+        local btnFrame = CreateFrame("Frame", nil, elementOrderSection, "BackdropTemplate")
+        btnFrame:SetSize(32, 24)
+        btnFrame:SetPoint("LEFT", elementOrderSection, "LEFT", 55 + (i - 1) * 75, -6)
+        btnFrame:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        btnFrame:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+
+        local text = btnFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        text:SetPoint("CENTER")
+        btnFrame.text = text
+
+        local leftBtn = CreateFrame("Button", nil, btnFrame, "UIPanelButtonTemplate")
+        leftBtn:SetSize(18, 18)
+        leftBtn:SetPoint("RIGHT", btnFrame, "LEFT", -2, 0)
+        leftBtn:SetText("<")
+        leftBtn:SetScript("OnClick", function() SwapElements(i, i - 1) end)
+        btnFrame.leftBtn = leftBtn
+
+        local rightBtn = CreateFrame("Button", nil, btnFrame, "UIPanelButtonTemplate")
+        rightBtn:SetSize(18, 18)
+        rightBtn:SetPoint("LEFT", btnFrame, "RIGHT", 2, 0)
+        rightBtn:SetText(">")
+        rightBtn:SetScript("OnClick", function() SwapElements(i, i + 1) end)
+        btnFrame.rightBtn = rightBtn
+
+        elementOrderButtons[i] = btnFrame
+    end
+
+    RefreshElementOrderButtons()
+    frame.RefreshElementOrderButtons = RefreshElementOrderButtons
+
+    -- Totem Order Sections (shifted down)
     local sectionWidth = 185
-    local sectionHeight = 140
+    local sectionHeight = 120
     local sections = {}
+    local totemSectionTopOffset = -55
 
     for i, element in ipairs(ELEMENT_ORDER) do
         local color = ELEMENT_COLORS[element]
@@ -932,7 +1057,7 @@ local function CreateConfigWindow()
 
         local section = CreateFrame("Frame", nil, orderingContent, "BackdropTemplate")
         section:SetSize(sectionWidth, sectionHeight)
-        section:SetPoint("TOPLEFT", orderingContent, "TOPLEFT", col * (sectionWidth + 10), -row * (sectionHeight + 10))
+        section:SetPoint("TOPLEFT", orderingContent, "TOPLEFT", col * (sectionWidth + 10), totemSectionTopOffset - row * (sectionHeight + 10))
         section:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8x8",
             edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -968,11 +1093,15 @@ local function CreateConfigWindow()
     resetBtn:SetPoint("RIGHT", orderButtonContainer, "CENTER", 65, 0)
     resetBtn:SetText("Reset to Default")
     resetBtn:SetScript("OnClick", function()
+        -- Reset element order
+        TotemDeckDB.elementOrder = { "Earth", "Fire", "Water", "Air" }
+        RefreshElementOrderButtons()
+        -- Reset totem order within each element
         for _, element in ipairs(ELEMENT_ORDER) do
             TotemDeckDB.totemOrder[element] = {}
             PopulateConfigSection(sections[element].scrollChild, element)
         end
-        print("|cFF00FF00TotemDeck:|r Totem order reset to default")
+        print("|cFF00FF00TotemDeck:|r Order reset to default")
     end)
 
     local applyBtn = CreateFrame("Button", nil, orderButtonContainer, "UIPanelButtonTemplate")
@@ -985,7 +1114,7 @@ local function CreateConfigWindow()
             return
         end
         RebuildPopupColumns()
-        print("|cFF00FF00TotemDeck:|r Totem order applied")
+        print("|cFF00FF00TotemDeck:|r Order applied")
     end)
 
     frame.sections = sections
@@ -1091,6 +1220,28 @@ local function InitializeOptionsMenu(self, level, menuList)
         info.text = "Lock Position"
         info.checked = TotemDeckDB.locked
         info.func = function() TotemDeckDB.locked = not TotemDeckDB.locked end
+        UIDropDownMenu_AddButton(info, level)
+
+        -- Always Show Popup toggle
+        info = UIDropDownMenu_CreateInfo()
+        info.text = "Always Show Popup"
+        info.checked = TotemDeckDB.alwaysShowPopup
+        info.func = function()
+            TotemDeckDB.alwaysShowPopup = not TotemDeckDB.alwaysShowPopup
+            if TotemDeckDB.alwaysShowPopup then
+                ShowPopup(GetElementOrder()[1])
+            else
+                popupVisible = false
+                for _, container in pairs(popupContainers) do
+                    if not InCombatLockdown() then
+                        container:Hide()
+                    else
+                        container:SetAlpha(0)
+                        container:SetFrameStrata("BACKGROUND")
+                    end
+                end
+            end
+        end
         UIDropDownMenu_AddButton(info, level)
 
         -- Spacer
@@ -1199,7 +1350,7 @@ local function CreateActionBarFrame()
     end)
 
     -- Create 4 active totem buttons
-    for i, element in ipairs(ELEMENT_ORDER) do
+    for i, element in ipairs(GetElementOrder()) do
         local activeKey = "active" .. element
         local totemName = TotemDeckDB[activeKey]
         local totemData = GetTotemData(totemName)
@@ -1348,7 +1499,7 @@ local function CreateTimerFrame()
     end)
 
     -- Create timer bars for each element
-    for i, element in ipairs(ELEMENT_ORDER) do
+    for i, element in ipairs(GetElementOrder()) do
         local bar = CreateTimerBar(timerFrame, element, i)
         bar:SetPoint("BOTTOM", 0, 5 + (i - 1) * 24)
         timerBars[element] = bar
@@ -1410,7 +1561,7 @@ UpdateTimers = function()
         -- Reposition visible bars based on timer position
         local timerPos = TotemDeckDB.timerPosition or "ABOVE"
         local yOffset = 5
-        for _, element in ipairs(ELEMENT_ORDER) do
+        for _, element in ipairs(GetElementOrder()) do
             local bar = timerBars[element]
             if bar:IsShown() then
                 bar:ClearAllPoints()
@@ -1433,6 +1584,8 @@ local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("PLAYER_TOTEM_UPDATE")
+eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED") -- Entering combat
+eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED") -- Leaving combat
 
 eventFrame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
@@ -1444,6 +1597,10 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             if TotemDeckDB[key] == nil then
                 TotemDeckDB[key] = value
             end
+        end
+        -- Ensure elementOrder has all 4 elements
+        if not TotemDeckDB.elementOrder or #TotemDeckDB.elementOrder ~= 4 then
+            TotemDeckDB.elementOrder = { "Earth", "Fire", "Water", "Air" }
         end
         -- Ensure totemOrder has all element keys
         if not TotemDeckDB.totemOrder then
@@ -1464,6 +1621,11 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         CreateTimerFrame()
         SetupPopupSystem()
 
+        -- Show popup if always show is enabled
+        if TotemDeckDB.alwaysShowPopup then
+            ShowPopup(GetElementOrder()[1])
+        end
+
         -- Create macros after a short delay (needs UI to be ready)
         C_Timer.After(2, function()
             CreateTotemMacros()
@@ -1471,6 +1633,25 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
 
     elseif event == "PLAYER_TOTEM_UPDATE" then
         UpdateTimers()
+
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        -- Entering combat: ensure all popup containers are shown (at alpha=0 if hidden)
+        -- so we can Show/Hide via alpha during combat
+        for _, container in pairs(popupContainers) do
+            if not container:IsShown() then
+                container:Show()
+                container:SetAlpha(0)
+                container:SetFrameStrata("BACKGROUND")
+            end
+        end
+
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        -- Leaving combat: apply any pending active totem updates
+        for element, _ in pairs(pendingActiveUpdates) do
+            UpdateActiveTotemButton(element)
+            UpdateTotemMacro(element)
+        end
+        pendingActiveUpdates = {}
     end
 end)
 
@@ -1504,7 +1685,6 @@ RebuildPopupColumns = function()
     end
     popupContainers = {}
     popupButtons = {}
-    popupBlockers = {}
 
     -- Destroy existing action bar buttons
     for element, btn in pairs(activeTotemButtons) do
@@ -1534,6 +1714,11 @@ RebuildPopupColumns = function()
 
     -- Rebuild timer frame to match new layout
     RebuildTimerFrame()
+
+    -- Show popup if always show is enabled
+    if TotemDeckDB.alwaysShowPopup then
+        ShowPopup(GetElementOrder()[1])
+    end
 
     return true
 end
