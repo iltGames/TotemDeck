@@ -1,4 +1,5 @@
-## Interface: 20504
+## Interface: 20505
+## X-Compatible-With: 20501, 20502, 20503, 20504, 20505
 ## Title: TotemDeck
 ## Notes: Shaman totem management - hover to pick your totems like cards from a deck
 ## Author: Player
