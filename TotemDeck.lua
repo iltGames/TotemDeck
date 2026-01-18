@@ -352,11 +352,6 @@ local function ShowPopup(hoveredElement)
     popupVisible = true
     popupHideDelay = 0
 
-    -- Hide timer bars while popup is shown
-    if timerFrame then
-        timerFrame:Hide()
-    end
-
     -- Hide all blockers so buttons are clickable
     for _, blocker in pairs(popupBlockers) do
         blocker:Hide()
@@ -796,6 +791,7 @@ local function CreateTimerFrame()
 
     timerFrame = CreateFrame("Frame", "TotemDeckTimers", actionBarFrame, "BackdropTemplate")
     timerFrame:SetSize(200, 100)
+    timerFrame:SetFrameStrata("MEDIUM") -- Below popups (DIALOG) so they render on top
 
     -- Position based on timerPosition setting
     if timerPos == "ABOVE" then
