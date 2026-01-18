@@ -473,14 +473,26 @@ ShowPopup = function(hoveredElement)
                 end
             end
         else
-            container:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
-            -- Dim the buttons in non-hovered columns
-            for _, btn in ipairs(popupButtons[elem]) do
-                local activeKey = "active" .. elem
-                if TotemDeckDB[activeKey] == btn.totemName then
-                    btn.border:SetBackdropBorderColor(0, 0.6, 0, 0.8)
-                else
-                    btn.border:SetBackdropBorderColor(0.2, 0.2, 0.2, 0.8)
+            -- When always show popup, keep element color; otherwise dim to gray
+            if TotemDeckDB.alwaysShowPopup then
+                container:SetBackdropBorderColor(color.r, color.g, color.b, 0.5)
+                for _, btn in ipairs(popupButtons[elem]) do
+                    local activeKey = "active" .. elem
+                    if TotemDeckDB[activeKey] == btn.totemName then
+                        btn.border:SetBackdropBorderColor(0, 0.8, 0, 0.8)
+                    else
+                        btn.border:SetBackdropBorderColor(color.r * 0.6, color.g * 0.6, color.b * 0.6, 0.6)
+                    end
+                end
+            else
+                container:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
+                for _, btn in ipairs(popupButtons[elem]) do
+                    local activeKey = "active" .. elem
+                    if TotemDeckDB[activeKey] == btn.totemName then
+                        btn.border:SetBackdropBorderColor(0, 0.6, 0, 0.8)
+                    else
+                        btn.border:SetBackdropBorderColor(0.2, 0.2, 0.2, 0.8)
+                    end
                 end
             end
         end
@@ -1690,30 +1702,28 @@ UpdateTimers = function()
 
                     -- Update button to show placed totem (if different from active)
                     if btn then
-                        if totemName ~= activeTotemName then
+                        -- Strip rank suffix for comparison (e.g., "Searing Totem VII" -> "Searing Totem")
+                        local baseTotemName = totemName:gsub("%s+[IVXLCDM]+$", "")
+                        if baseTotemName ~= activeTotemName then
                             -- Placed totem differs from active - show with visual indicator
-                            -- Strip rank suffix (e.g., "Magma Totem IV" -> "Magma Totem")
-                            local baseName = totemName:gsub("%s+[IVXLCDM]+$", "")
-                            local placedIcon = GetSpellTexture(baseName) or GetSpellTexture(totemName)
+                            local placedIcon = GetSpellTexture(baseTotemName) or GetSpellTexture(totemName)
                             if placedIcon then
                                 btn.icon:SetTexture(placedIcon)
-                                btn.icon:SetVertexColor(0.6, 0.6, 0.6)
+                                btn.icon:SetDesaturated(true)
                                 btn.border:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
                                 btn.showingPlaced = true
                                 btn.placedTotemName = totemName
                             end
-                        else
-                            -- Placed totem matches active - ensure normal display
-                            if btn.showingPlaced then
-                                local activeIcon = GetSpellTexture(activeTotemName)
-                                if activeIcon then
-                                    btn.icon:SetTexture(activeIcon)
-                                end
-                                btn.showingPlaced = false
-                                btn.placedTotemName = nil
+                        elseif btn.showingPlaced then
+                            -- Placed totem matches active - revert to normal display
+                            local activeIcon = GetSpellTexture(activeTotemName)
+                            if activeIcon then
+                                btn.icon:SetTexture(activeIcon)
                             end
-                            btn.icon:SetVertexColor(1, 1, 1)
+                            btn.icon:SetDesaturated(false)
                             btn.border:SetBackdropBorderColor(btn.color.r, btn.color.g, btn.color.b, 1)
+                            btn.showingPlaced = false
+                            btn.placedTotemName = nil
                         end
                     end
                 else
@@ -1725,7 +1735,7 @@ UpdateTimers = function()
                         if activeIcon then
                             btn.icon:SetTexture(activeIcon)
                         end
-                        btn.icon:SetVertexColor(1, 1, 1)
+                        btn.icon:SetDesaturated(false)
                         btn.border:SetBackdropBorderColor(btn.color.r, btn.color.g, btn.color.b, 1)
                         btn.showingPlaced = false
                         btn.placedTotemName = nil
@@ -1740,7 +1750,7 @@ UpdateTimers = function()
                     if activeIcon then
                         btn.icon:SetTexture(activeIcon)
                     end
-                    btn.icon:SetVertexColor(1, 1, 1)
+                    btn.icon:SetDesaturated(false)
                     btn.border:SetBackdropBorderColor(btn.color.r, btn.color.g, btn.color.b, 1)
                     btn.showingPlaced = false
                     btn.placedTotemName = nil
