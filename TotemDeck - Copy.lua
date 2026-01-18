@@ -12,8 +12,6 @@ local defaults = {
     barPos = { point = "CENTER", x = 0, y = -200 },
     showTimers = true,
     locked = false,
-    popupDirection = "UP", -- UP, DOWN, LEFT, RIGHT
-    timerPosition = "ABOVE", -- ABOVE, BELOW, LEFT, RIGHT
 }
 
 -- Totem data: name, duration in seconds, icon
@@ -75,18 +73,16 @@ local TOTEM_SLOTS = {
 }
 
 -- UI elements
-local timerFrame, actionBarFrame
+local timerFrame, actionBarFrame, popupFrame, popupBlocker
 local timerBars = {}
 local activeTotemButtons = {}
 local popupButtons = {}
-local popupContainers = {} -- Container frames for each element, anchored to main bar buttons
-local popupBlockers = {} -- Blocker frames to prevent clicks when hidden
+local popupContainers = {} -- Container frames for each element (non-secure, can show/hide in combat)
+local popupContainerBlockers = {} -- Blocker frame per container to prevent clicks on hidden buttons
 local buttonCounter = 0
 local popupVisible = false
+local popupElement = nil
 local popupHideDelay = 0
-
--- Forward declarations
-local RebuildPopupColumns, RebuildTimerFrame, CreateTotemMacros
 
 -- Utility: Check if player is a Shaman
 local function IsShaman()
@@ -119,7 +115,7 @@ end
 local UpdateActiveTotemButton
 
 -- Create or update macros for active totems
-CreateTotemMacros = function()
+local function CreateTotemMacros()
     for _, element in ipairs(ELEMENT_ORDER) do
         local macroName = "TD" .. element
         local macroIcon = "INV_Misc_QuestionMark"
@@ -317,10 +313,11 @@ local function CreatePopupButton(parent, totemData, element, index)
         end
     end)
 
-    -- Tooltip (to the right of the button)
+    -- Tooltip (above the totem bar)
     btn:SetScript("OnEnter", function(self)
         self.border:SetBackdropBorderColor(1, 1, 1, 1)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetOwner(self, "ANCHOR_NONE")
+        GameTooltip:SetPoint("BOTTOM", popupFrame, "TOP", 0, 5)
         GameTooltip:SetText(self.totemName, 1, 1, 1)
         GameTooltip:AddLine("Duration: " .. FormatTime(self.totemDuration), 0.7, 0.7, 0.7)
         local activeKey = "active" .. self.element
@@ -347,9 +344,20 @@ local function CreatePopupButton(parent, totemData, element, index)
     return btn
 end
 
--- Show all popup columns (called when hovering any main bar button)
-local function ShowPopup(hoveredElement)
+-- Show popup for an element
+local function ShowPopup(element, anchorButton)
+    popupElement = element
     popupVisible = true
+
+    local totems = TOTEMS[element]
+    local color = ELEMENT_COLORS[element]
+
+    -- Size popup to match action bar width, height based on totem count
+    local numTotems = #totems
+    local rows = math.ceil(numTotems / 4)
+
+    popupFrame:SetSize(200, rows * 40 + 10)
+    popupFrame:SetBackdropBorderColor(color.r, color.g, color.b, 1)
     popupHideDelay = 0
 
     -- Hide timer bars while popup is shown
@@ -357,59 +365,64 @@ local function ShowPopup(hoveredElement)
         timerFrame:Hide()
     end
 
-    -- Hide all blockers so buttons are clickable
-    for _, blocker in pairs(popupBlockers) do
-        blocker:Hide()
+    -- Lower main blocker so clicks reach buttons
+    if popupBlocker then
+        popupBlocker:SetFrameLevel(popupFrame:GetFrameLevel() + 1)
     end
 
-    -- Show all element columns, highlight the hovered one
+    -- Show current element, hide others with alpha
+    -- Each hidden container's blocker is raised to block its buttons
     for elem, container in pairs(popupContainers) do
-        local color = ELEMENT_COLORS[elem]
-        container:SetAlpha(1)
-        container:SetFrameStrata("DIALOG") -- Use DIALOG so GameTooltip (TOOLTIP strata) is above
-        container:Show()
-
-        -- Highlight hovered element, dim others
-        if elem == hoveredElement then
-            container:SetBackdropBorderColor(color.r, color.g, color.b, 1)
-            -- Update active totem highlights for this element
-            local activeKey = "active" .. elem
-            for _, btn in ipairs(popupButtons[elem]) do
-                if TotemDeckDB[activeKey] == btn.totemName then
-                    btn.border:SetBackdropBorderColor(0, 1, 0, 1)
-                else
-                    btn.border:SetBackdropBorderColor(color.r, color.g, color.b, 0.8)
-                end
+        local blocker = popupContainerBlockers[elem]
+        if elem == element then
+            container:SetAlpha(1)
+            container:SetFrameLevel(popupFrame:GetFrameLevel() + 50)
+            container:SetSize(200, rows * 40 + 10)
+            -- Lower this container's blocker below its buttons
+            if blocker then
+                blocker:SetFrameLevel(popupFrame:GetFrameLevel() + 49)
             end
         else
-            container:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
-            -- Dim the buttons in non-hovered columns
-            for _, btn in ipairs(popupButtons[elem]) do
-                local activeKey = "active" .. elem
-                if TotemDeckDB[activeKey] == btn.totemName then
-                    btn.border:SetBackdropBorderColor(0, 0.6, 0, 0.8)
-                else
-                    btn.border:SetBackdropBorderColor(0.2, 0.2, 0.2, 0.8)
-                end
+            container:SetAlpha(0)
+            container:SetFrameLevel(popupFrame:GetFrameLevel() + 10)
+            -- Raise this container's blocker above its buttons to block clicks
+            if blocker then
+                blocker:SetFrameLevel(popupFrame:GetFrameLevel() + 11)
             end
         end
     end
+
+    -- Update active totem highlights (border frames are non-secure)
+    for i, totemData in ipairs(totems) do
+        local btn = popupButtons[element][i]
+        local activeKey = "active" .. element
+        if TotemDeckDB[activeKey] == totemData.name then
+            btn.border:SetBackdropBorderColor(0, 1, 0, 1)
+        else
+            btn.border:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+        end
+    end
+
+    popupFrame:SetAlpha(1)
 end
 
 -- Forward declaration for UpdateTimers
 local UpdateTimers
 
--- Hide all popup columns
+-- Hide popup
 local function HidePopup()
     popupVisible = false
-    for _, container in pairs(popupContainers) do
-        container:SetAlpha(0)
-        -- Lower strata so we don't block other UI when hidden
-        container:SetFrameStrata("BACKGROUND")
-    end
-    -- Show all blockers to intercept clicks on hidden buttons
-    for _, blocker in pairs(popupBlockers) do
-        blocker:Show()
+    popupElement = nil
+    if popupFrame then
+        popupFrame:SetAlpha(0)
+        -- Raise main blocker to intercept clicks on invisible buttons
+        if popupBlocker then
+            popupBlocker:SetFrameLevel(popupFrame:GetFrameLevel() + 200)
+        end
+        -- Raise all container blockers too
+        for _, blocker in pairs(popupContainerBlockers) do
+            blocker:SetFrameLevel(popupFrame:GetFrameLevel() + 11)
+        end
     end
     GameTooltip:Hide()
     -- Show timer bars again
@@ -418,26 +431,23 @@ local function HidePopup()
     end
 end
 
--- Check if mouse is over any popup column or main bar button
+-- Check if mouse is over popup or anchor button
 local function IsMouseOverPopupArea()
-    if not popupVisible then
-        return false
+    -- Check popup frame (use popupVisible instead of IsShown since we use alpha)
+    if popupFrame and popupVisible and popupFrame:IsMouseOver() then
+        return true
     end
-    -- Check all main bar buttons
-    for _, btn in pairs(activeTotemButtons) do
-        if btn:IsMouseOver() then
-            return true
-        end
+    -- Check anchor button
+    if popupElement and activeTotemButtons[popupElement] and activeTotemButtons[popupElement]:IsMouseOver() then
+        return true
     end
-    -- Check all element containers
-    for _, container in pairs(popupContainers) do
-        if container:IsMouseOver() then
-            return true
-        end
+    -- Check element container
+    if popupElement and popupContainers[popupElement] and popupContainers[popupElement]:IsMouseOver() then
+        return true
     end
-    -- Check all popup buttons
-    for _, buttons in pairs(popupButtons) do
-        for _, btn in ipairs(buttons) do
+    -- Check individual popup buttons (they're always "shown", visibility controlled by container alpha)
+    if popupElement and popupButtons[popupElement] then
+        for _, btn in ipairs(popupButtons[popupElement]) do
             if btn:IsMouseOver() then
                 return true
             end
@@ -446,95 +456,25 @@ local function IsMouseOverPopupArea()
     return false
 end
 
--- Create popup column/row for a specific element (called after main bar button exists)
-local function CreatePopupColumn(element, anchorButton)
-    local totems = TOTEMS[element]
-    local numTotems = #totems
-    local color = ELEMENT_COLORS[element]
-    local direction = TotemDeckDB.popupDirection or "UP"
-    local isHorizontal = (direction == "LEFT" or direction == "RIGHT")
+-- Create the popup frame
+local function CreatePopupFrame()
+    popupFrame = CreateFrame("Frame", "TotemDeckPopup", UIParent, "BackdropTemplate")
+    popupFrame:SetSize(170, 50)
+    popupFrame:SetFrameStrata("TOOLTIP")
 
-    -- Create container anchored to the main bar button
-    local container = CreateFrame("Frame", nil, anchorButton, "BackdropTemplate")
-
-    -- Size based on direction
-    if isHorizontal then
-        container:SetSize(numTotems * 40 + 8, 44) -- Horizontal row
-    else
-        container:SetSize(44, numTotems * 40 + 8) -- Vertical column
-    end
-
-    -- Anchor based on direction
-    if direction == "UP" then
-        container:SetPoint("BOTTOM", anchorButton, "TOP", 0, 2)
-    elseif direction == "DOWN" then
-        container:SetPoint("TOP", anchorButton, "BOTTOM", 0, -2)
-    elseif direction == "LEFT" then
-        container:SetPoint("RIGHT", anchorButton, "LEFT", -2, 0)
-    else -- RIGHT
-        container:SetPoint("LEFT", anchorButton, "RIGHT", 2, 0)
-    end
-
-    container:SetFrameStrata("BACKGROUND") -- Start low, raised when shown
-
-    container:SetBackdrop({
+    popupFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         edgeSize = 2,
         insets = { left = 2, right = 2, top = 2, bottom = 2 },
     })
-    container:SetBackdropColor(0.05, 0.05, 0.05, 0.95)
-    container:SetBackdropBorderColor(color.r, color.g, color.b, 1)
+    popupFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.95)
+    popupFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
 
-    container:SetAlpha(0) -- Start hidden
-    container:Show()
-    popupContainers[element] = container
+    popupFrame:EnableMouse(true)
 
-    -- Create buttons
-    popupButtons[element] = {}
-    for i, totemData in ipairs(totems) do
-        local btn = CreatePopupButton(container, totemData, element, i)
-
-        if direction == "UP" then
-            -- Vertical: first totem at bottom, last at top
-            local yOffset = 4 + (i - 1) * 40
-            btn.visual:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", 4, yOffset)
-        elseif direction == "DOWN" then
-            -- Vertical: first totem at top, last at bottom
-            local yOffset = 4 + (i - 1) * 40
-            btn.visual:SetPoint("TOPLEFT", container, "TOPLEFT", 4, -yOffset)
-        elseif direction == "LEFT" then
-            -- Horizontal: first totem closest to bar (right side), last at left
-            local xOffset = 4 + (i - 1) * 40
-            btn.visual:SetPoint("TOPRIGHT", container, "TOPRIGHT", -xOffset, -4)
-        else -- RIGHT
-            -- Horizontal: first totem closest to bar (left side), last at right
-            local xOffset = 4 + (i - 1) * 40
-            btn.visual:SetPoint("TOPLEFT", container, "TOPLEFT", xOffset, -4)
-        end
-
-        btn.visual:Show()
-        btn:Show()
-        popupButtons[element][i] = btn
-    end
-
-    -- Create blocker frame (non-secure, can Show/Hide in combat)
-    -- Blocks clicks on buttons when popup is hidden
-    local blocker = CreateFrame("Frame", nil, container)
-    blocker:SetAllPoints(container)
-    blocker:SetFrameLevel(container:GetFrameLevel() + 100) -- Above all buttons
-    blocker:EnableMouse(true) -- Intercepts mouse events
-    blocker:Show() -- Start shown (popup starts hidden)
-    popupBlockers[element] = blocker
-
-    return container
-end
-
--- Setup popup system (OnUpdate handler for hide delay)
-local function SetupPopupSystem()
-    -- Create a helper frame for the OnUpdate handler
-    local updateFrame = CreateFrame("Frame")
-    updateFrame:SetScript("OnUpdate", function(self, elapsed)
+    -- Check periodically if we should hide (with small delay)
+    popupFrame:SetScript("OnUpdate", function(self, elapsed)
         if popupVisible then
             if IsMouseOverPopupArea() then
                 popupHideDelay = 0
@@ -546,134 +486,90 @@ local function SetupPopupSystem()
             end
         end
     end)
-end
 
--- Options menu
-local optionsMenu = CreateFrame("Frame", "TotemDeckOptionsMenu", UIParent, "UIDropDownMenuTemplate")
+    -- Keep frame shown but invisible (position will be set after actionBarFrame is created)
+    popupFrame:Show()
+    popupFrame:SetAlpha(0)
 
-local function InitializeOptionsMenu(self, level, menuList)
-    level = level or 1
-    local info = UIDropDownMenu_CreateInfo()
+    -- Create blocker frame to intercept clicks when popup is hidden
+    popupBlocker = CreateFrame("Frame", nil, popupFrame)
+    popupBlocker:SetAllPoints(popupFrame)
+    popupBlocker:EnableMouse(true) -- Intercepts all mouse clicks
+    popupBlocker:SetFrameLevel(popupFrame:GetFrameLevel() + 200) -- Start high to block
+    popupBlocker:Show()
 
-    if level == 1 then
-        -- Title
-        info.text = "TotemDeck Options"
-        info.isTitle = true
-        info.notCheckable = true
-        UIDropDownMenu_AddButton(info, level)
+    -- Pre-create container frames and buttons for each element (required for combat use)
+    -- Use alpha for visibility instead of Show/Hide (works in combat with secure children)
+    for _, element in ipairs(ELEMENT_ORDER) do
+        -- Create non-secure container for this element
+        local container = CreateFrame("Frame", nil, popupFrame)
+        container:SetAllPoints(popupFrame)
+        container:SetSize(200, 200)
+        container:SetAlpha(0) -- Start hidden
+        container:SetFrameLevel(popupFrame:GetFrameLevel() + 10) -- Initialize frame level
+        container:Show()
+        popupContainers[element] = container
 
-        -- Popup Direction submenu
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Popup Direction"
-        info.notCheckable = true
-        info.hasArrow = true
-        info.menuList = "POPUP_DIR"
-        UIDropDownMenu_AddButton(info, level)
+        popupButtons[element] = {}
+        local totems = TOTEMS[element]
+        local numTotems = #totems
 
-        -- Timer Position submenu
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Timer Position"
-        info.notCheckable = true
-        info.hasArrow = true
-        info.menuList = "TIMER_POS"
-        UIDropDownMenu_AddButton(info, level)
+        for i, totemData in ipairs(totems) do
+            -- Parent buttons to the container (not directly to popupFrame)
+            local btn = CreatePopupButton(container, totemData, element, i)
 
-        -- Spacer
-        info = UIDropDownMenu_CreateInfo()
-        info.text = ""
-        info.isTitle = true
-        info.notCheckable = true
-        UIDropDownMenu_AddButton(info, level)
+            -- Pre-position visual frame at creation time (btn follows via SetAllPoints)
+            local col = (i - 1) % 4
+            local row = math.floor((i - 1) / 4)
+            local totalCols = math.min(numTotems - (row * 4), 4)
+            local rowWidth = totalCols * 40
+            local startX = (200 - rowWidth) / 2
+            btn.visual:SetPoint("TOPLEFT", container, "TOPLEFT", startX + col * 40, -5 - row * 40)
 
-        -- Show Timers toggle
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Show Timers"
-        info.checked = TotemDeckDB.showTimers
-        info.func = function()
-            TotemDeckDB.showTimers = not TotemDeckDB.showTimers
-            if not TotemDeckDB.showTimers and timerFrame then
-                timerFrame:Hide()
-            elseif TotemDeckDB.showTimers then
-                UpdateTimers()
-            end
+            -- Show both visual and button
+            btn.visual:Show()
+            btn:Show()
+            popupButtons[element][i] = btn
         end
-        UIDropDownMenu_AddButton(info, level)
 
-        -- Lock Position toggle
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Lock Position"
-        info.checked = TotemDeckDB.locked
-        info.func = function() TotemDeckDB.locked = not TotemDeckDB.locked end
-        UIDropDownMenu_AddButton(info, level)
+        -- Create blocker for this container (blocks clicks on hidden buttons)
+        local containerBlocker = CreateFrame("Frame", nil, container)
+        containerBlocker:SetAllPoints(container)
+        containerBlocker:EnableMouse(true)
+        containerBlocker:SetFrameLevel(popupFrame:GetFrameLevel() + 11) -- Start above buttons to block
+        containerBlocker:Show()
+        popupContainerBlockers[element] = containerBlocker
 
-        -- Spacer
-        info = UIDropDownMenu_CreateInfo()
-        info.text = ""
-        info.isTitle = true
-        info.notCheckable = true
-        UIDropDownMenu_AddButton(info, level)
+    end
 
-        -- Recreate Macros
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Recreate Macros"
-        info.notCheckable = true
-        info.func = function() CreateTotemMacros(); print("|cFF00FF00TotemDeck:|r Macros recreated") end
-        UIDropDownMenu_AddButton(info, level)
-
-        -- Close
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Close"
-        info.notCheckable = true
-        info.func = function() CloseDropDownMenus() end
-        UIDropDownMenu_AddButton(info, level)
-
-    elseif level == 2 then
-        if menuList == "POPUP_DIR" then
-            local directions = { { "Up", "UP" }, { "Down", "DOWN" }, { "Left", "LEFT" }, { "Right", "RIGHT" } }
-            for _, dir in ipairs(directions) do
-                info = UIDropDownMenu_CreateInfo()
-                info.text = dir[1]
-                info.checked = (TotemDeckDB.popupDirection == dir[2])
-                info.func = function()
-                    TotemDeckDB.popupDirection = dir[2]
-                    CloseDropDownMenus()
-                    RebuildPopupColumns()
-                end
-                UIDropDownMenu_AddButton(info, level)
-            end
-        elseif menuList == "TIMER_POS" then
-            local positions = { { "Above", "ABOVE" }, { "Below", "BELOW" }, { "Left", "LEFT" }, { "Right", "RIGHT" } }
-            for _, pos in ipairs(positions) do
-                info = UIDropDownMenu_CreateInfo()
-                info.text = pos[1]
-                info.checked = (TotemDeckDB.timerPosition == pos[2])
-                info.func = function()
-                    TotemDeckDB.timerPosition = pos[2]
-                    CloseDropDownMenus()
-                    RebuildTimerFrame()
-                end
-                UIDropDownMenu_AddButton(info, level)
-            end
+    -- Pre-render all containers so they work in combat (briefly show then hide)
+    -- Position will be set properly after actionBarFrame is created
+    popupFrame:SetAlpha(1)
+    for elem, container in pairs(popupContainers) do
+        container:SetAlpha(1)
+        container:SetFrameLevel(popupFrame:GetFrameLevel() + 50)
+        -- Lower blockers during pre-render
+        if popupContainerBlockers[elem] then
+            popupContainerBlockers[elem]:SetFrameLevel(popupFrame:GetFrameLevel() + 49)
         end
     end
-end
-
-local function OpenOptionsMenu(anchorFrame)
-    UIDropDownMenu_Initialize(optionsMenu, InitializeOptionsMenu, "MENU")
-    ToggleDropDownMenu(1, nil, optionsMenu, "cursor", 0, 0)
+    C_Timer.After(0.01, function()
+        popupFrame:SetAlpha(0)
+        for elem, container in pairs(popupContainers) do
+            container:SetAlpha(0)
+            container:SetFrameLevel(popupFrame:GetFrameLevel() + 10)
+            -- Raise blockers after pre-render
+            if popupContainerBlockers[elem] then
+                popupContainerBlockers[elem]:SetFrameLevel(popupFrame:GetFrameLevel() + 11)
+            end
+        end
+    end)
 end
 
 -- Create the action bar with active totem buttons
 local function CreateActionBarFrame()
-    local direction = TotemDeckDB.popupDirection or "UP"
-    local isVertical = (direction == "LEFT" or direction == "RIGHT")
-
     actionBarFrame = CreateFrame("Frame", "TotemDeckBar", UIParent, "BackdropTemplate")
-    if isVertical then
-        actionBarFrame:SetSize(48, 200) -- Vertical bar
-    else
-        actionBarFrame:SetSize(200, 48) -- Horizontal bar
-    end
+    actionBarFrame:SetSize(200, 48)
     actionBarFrame:SetPoint(TotemDeckDB.barPos.point, TotemDeckDB.barPos.x, TotemDeckDB.barPos.y)
 
     actionBarFrame:SetBackdrop({
@@ -685,13 +581,11 @@ local function CreateActionBarFrame()
     actionBarFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
     actionBarFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
 
-    -- Make movable with Ctrl+Click, options menu with Alt+Click
+    -- Make movable with Ctrl+Click anywhere
     actionBarFrame:SetMovable(true)
     actionBarFrame:EnableMouse(true)
     actionBarFrame:SetScript("OnMouseDown", function(self, button)
-        if button == "LeftButton" and IsAltKeyDown() then
-            OpenOptionsMenu(self)
-        elseif button == "LeftButton" and IsControlKeyDown() and not TotemDeckDB.locked then
+        if button == "LeftButton" and IsControlKeyDown() and not TotemDeckDB.locked then
             self:StartMoving()
         end
     end)
@@ -710,11 +604,7 @@ local function CreateActionBarFrame()
 
         local btn = CreateFrame("Button", "TotemDeckActive" .. element, actionBarFrame, "SecureActionButtonTemplate")
         btn:SetSize(40, 40)
-        if isVertical then
-            btn:SetPoint("TOP", 0, -8 - (i - 1) * 48) -- Stacked vertically
-        else
-            btn:SetPoint("LEFT", 8 + (i - 1) * 48, 0) -- Spaced horizontally
-        end
+        btn:SetPoint("LEFT", 8 + (i - 1) * 48, 0) -- Spaced with buffer
 
         -- Add backdrop manually
         btn.bg = btn:CreateTexture(nil, "BACKGROUND")
@@ -754,11 +644,9 @@ local function CreateActionBarFrame()
             btn.totemName = totemName
         end
 
-        -- Ctrl+click to move the frame, Alt+click for options
+        -- Ctrl+click to move the frame
         btn:HookScript("OnMouseDown", function(self, button)
-            if button == "LeftButton" and IsAltKeyDown() then
-                OpenOptionsMenu(self)
-            elseif button == "LeftButton" and IsControlKeyDown() and not TotemDeckDB.locked then
+            if button == "LeftButton" and IsControlKeyDown() and not TotemDeckDB.locked then
                 actionBarFrame:StartMoving()
             end
         end)
@@ -782,31 +670,16 @@ local function CreateActionBarFrame()
         btn.element = element
         btn.color = color
         activeTotemButtons[element] = btn
-
-        -- Create popup column for this element (anchored to this button)
-        CreatePopupColumn(element, btn)
     end
 
     actionBarFrame:Show()
 end
 
--- Create timer frame (position based on timerPosition setting)
+-- Create timer frame (attached above action bar)
 local function CreateTimerFrame()
-    local timerPos = TotemDeckDB.timerPosition or "ABOVE"
-
     timerFrame = CreateFrame("Frame", "TotemDeckTimers", actionBarFrame, "BackdropTemplate")
     timerFrame:SetSize(200, 100)
-
-    -- Position based on timerPosition setting
-    if timerPos == "ABOVE" then
-        timerFrame:SetPoint("BOTTOM", actionBarFrame, "TOP", 0, 2)
-    elseif timerPos == "BELOW" then
-        timerFrame:SetPoint("TOP", actionBarFrame, "BOTTOM", 0, -2)
-    elseif timerPos == "LEFT" then
-        timerFrame:SetPoint("RIGHT", actionBarFrame, "LEFT", -2, 0)
-    else -- RIGHT
-        timerFrame:SetPoint("LEFT", actionBarFrame, "RIGHT", 2, 0)
-    end
+    timerFrame:SetPoint("BOTTOM", actionBarFrame, "TOP", 0, 2)
 
     timerFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -816,14 +689,6 @@ local function CreateTimerFrame()
     })
     timerFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
     timerFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
-
-    -- Alt+Click for options menu
-    timerFrame:EnableMouse(true)
-    timerFrame:SetScript("OnMouseDown", function(self, button)
-        if button == "LeftButton" and IsAltKeyDown() then
-            OpenOptionsMenu(self)
-        end
-    end)
 
     -- Create timer bars for each element
     for i, element in ipairs(ELEMENT_ORDER) do
@@ -885,19 +750,13 @@ UpdateTimers = function()
         end
         timerFrame:SetHeight(10 + visibleCount * 24)
 
-        -- Reposition visible bars based on timer position
-        local timerPos = TotemDeckDB.timerPosition or "ABOVE"
+        -- Reposition visible bars from bottom up
         local yOffset = 5
         for _, element in ipairs(ELEMENT_ORDER) do
             local bar = timerBars[element]
             if bar:IsShown() then
                 bar:ClearAllPoints()
-                -- ABOVE, LEFT, RIGHT stack from bottom; BELOW stacks from top
-                if timerPos == "BELOW" then
-                    bar:SetPoint("TOP", 0, -yOffset)
-                else
-                    bar:SetPoint("BOTTOM", 0, yOffset)
-                end
+                bar:SetPoint("BOTTOM", 0, yOffset)
                 yOffset = yOffset + 24
             end
         end
@@ -929,9 +788,13 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             return
         end
 
+        CreatePopupFrame()
         CreateActionBarFrame()
         CreateTimerFrame()
-        SetupPopupSystem()
+
+        -- Position popup frame above action bar (must be done after actionBarFrame exists)
+        popupFrame:ClearAllPoints()
+        popupFrame:SetPoint("BOTTOM", actionBarFrame, "TOP", 0, 0)
 
         -- Create macros after a short delay (needs UI to be ready)
         C_Timer.After(2, function()
@@ -956,69 +819,6 @@ timerUpdateFrame:SetScript("OnUpdate", function(self, delta)
     end
 end)
 
--- Rebuild entire UI (needed when direction changes - affects bar layout)
-RebuildPopupColumns = function()
-    if InCombatLockdown() then
-        print("|cFF00FF00TotemDeck:|r Cannot change direction in combat")
-        return false
-    end
-
-    -- Hide popup first
-    HidePopup()
-
-    -- Destroy existing popup containers
-    for element, container in pairs(popupContainers) do
-        container:Hide()
-        container:SetParent(nil)
-    end
-    popupContainers = {}
-    popupButtons = {}
-    popupBlockers = {}
-
-    -- Destroy existing action bar buttons
-    for element, btn in pairs(activeTotemButtons) do
-        btn:Hide()
-        btn:SetParent(nil)
-    end
-    activeTotemButtons = {}
-
-    -- Destroy and recreate action bar frame with new layout
-    local savedPos = nil
-    if actionBarFrame then
-        local point, _, _, x, y = actionBarFrame:GetPoint()
-        savedPos = { point = point, x = x, y = y }
-        actionBarFrame:Hide()
-        actionBarFrame:SetParent(nil)
-        actionBarFrame = nil
-    end
-
-    -- Recreate action bar (which also recreates popup columns)
-    CreateActionBarFrame()
-
-    -- Restore position
-    if savedPos then
-        actionBarFrame:ClearAllPoints()
-        actionBarFrame:SetPoint(savedPos.point, savedPos.x, savedPos.y)
-    end
-
-    -- Rebuild timer frame to match new layout
-    RebuildTimerFrame()
-
-    return true
-end
-
--- Rebuild timer frame (needed when position changes)
-RebuildTimerFrame = function()
-    if timerFrame then
-        timerFrame:Hide()
-        timerFrame:SetParent(nil)
-        timerFrame = nil
-    end
-    timerBars = {}
-    CreateTimerFrame()
-    UpdateTimers()
-end
-
 -- Slash commands
 SLASH_TOTEMDECK1 = "/td"
 
@@ -1042,48 +842,7 @@ SlashCmdList["TOTEMDECK"] = function(msg)
         end
     elseif cmd == "macros" then
         CreateTotemMacros()
-    elseif cmd == "popup up" then
-        TotemDeckDB.popupDirection = "UP"
-        if RebuildPopupColumns() then
-            print("|cFF00FF00TotemDeck:|r Popup direction set to UP")
-        end
-    elseif cmd == "popup down" then
-        TotemDeckDB.popupDirection = "DOWN"
-        if RebuildPopupColumns() then
-            print("|cFF00FF00TotemDeck:|r Popup direction set to DOWN")
-        end
-    elseif cmd == "popup left" then
-        TotemDeckDB.popupDirection = "LEFT"
-        if RebuildPopupColumns() then
-            print("|cFF00FF00TotemDeck:|r Popup direction set to LEFT")
-        end
-    elseif cmd == "popup right" then
-        TotemDeckDB.popupDirection = "RIGHT"
-        if RebuildPopupColumns() then
-            print("|cFF00FF00TotemDeck:|r Popup direction set to RIGHT")
-        end
-    elseif cmd == "timers above" then
-        TotemDeckDB.timerPosition = "ABOVE"
-        RebuildTimerFrame()
-        print("|cFF00FF00TotemDeck:|r Timers position set to ABOVE")
-    elseif cmd == "timers below" then
-        TotemDeckDB.timerPosition = "BELOW"
-        RebuildTimerFrame()
-        print("|cFF00FF00TotemDeck:|r Timers position set to BELOW")
-    elseif cmd == "timers left" then
-        TotemDeckDB.timerPosition = "LEFT"
-        RebuildTimerFrame()
-        print("|cFF00FF00TotemDeck:|r Timers position set to LEFT")
-    elseif cmd == "timers right" then
-        TotemDeckDB.timerPosition = "RIGHT"
-        RebuildTimerFrame()
-        print("|cFF00FF00TotemDeck:|r Timers position set to RIGHT")
     else
-        print("|cFF00FF00TotemDeck:|r Commands:")
-        print("  /td show - Toggle bar visibility")
-        print("  /td timers - Toggle timer display")
-        print("  /td macros - Recreate macros")
-        print("  /td popup up|down|left|right - Set popup direction")
-        print("  /td timers above|below|left|right - Set timer position")
+        print("|cFF00FF00TotemDeck:|r /td show | timers | macros")
     end
 end
