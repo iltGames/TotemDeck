@@ -22,6 +22,12 @@ local defaults = {
         Water = {},
         Air = {},
     },
+    hiddenTotems = { -- Totems hidden from popup
+        Earth = {},
+        Fire = {},
+        Water = {},
+        Air = {},
+    },
 }
 
 -- Totem data: name, duration in seconds, icon
@@ -128,6 +134,19 @@ local function IsTotemKnown(totemName)
         return false
     end
     return IsPlayerSpell(spellID)
+end
+
+-- Check if a totem is hidden by the user
+local function IsTotemHidden(element, totemName)
+    if not TotemDeckDB or not TotemDeckDB.hiddenTotems or not TotemDeckDB.hiddenTotems[element] then
+        return false
+    end
+    for _, hidden in ipairs(TotemDeckDB.hiddenTotems[element]) do
+        if hidden == totemName then
+            return true
+        end
+    end
+    return false
 end
 
 -- Get totems for an element in custom order (if set)
@@ -542,10 +561,10 @@ local function CreatePopupColumn(element, anchorButton)
     local direction = TotemDeckDB.popupDirection or "UP"
     local isHorizontal = (direction == "LEFT" or direction == "RIGHT")
 
-    -- Filter to only trained totems
+    -- Filter to only trained totems that aren't hidden
     local totems = {}
     for _, totemData in ipairs(allTotems) do
-        if IsTotemKnown(totemData.name) then
+        if IsTotemKnown(totemData.name) and not IsTotemHidden(element, totemData.name) then
             table.insert(totems, totemData)
         end
     end
@@ -685,12 +704,13 @@ end
 
 local function CreateTotemRow(parent, totemData, element, index)
     local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(170, 22)
+    row:SetSize(140, 22)
     row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -((index - 1) * 24))
     row.totemName = totemData.name
+    row.element = element
 
     local upBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    upBtn:SetSize(20, 20)
+    upBtn:SetSize(16, 16)
     upBtn:SetPoint("LEFT", 0, 0)
     upBtn:SetText("^")
     upBtn:SetScript("OnClick", function()
@@ -704,8 +724,8 @@ local function CreateTotemRow(parent, totemData, element, index)
     row.upBtn = upBtn
 
     local downBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    downBtn:SetSize(20, 20)
-    downBtn:SetPoint("LEFT", upBtn, "RIGHT", 2, 0)
+    downBtn:SetSize(16, 16)
+    downBtn:SetPoint("LEFT", upBtn, "RIGHT", 1, 0)
     downBtn:SetText("v")
     downBtn:SetScript("OnClick", function()
         for i, r in ipairs(configTotemRows[element]) do
@@ -718,15 +738,65 @@ local function CreateTotemRow(parent, totemData, element, index)
     row.downBtn = downBtn
 
     local icon = row:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(18, 18)
-    icon:SetPoint("LEFT", downBtn, "RIGHT", 4, 0)
+    icon:SetSize(16, 16)
+    icon:SetPoint("LEFT", downBtn, "RIGHT", 2, 0)
     icon:SetTexture(GetSpellTexture(totemData.name) or totemData.icon)
+    row.icon = icon
 
     local name = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    name:SetPoint("LEFT", icon, "RIGHT", 4, 0)
-    name:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    name:SetPoint("LEFT", icon, "RIGHT", 2, 0)
+    name:SetPoint("RIGHT", row, "RIGHT", -18, 0)
     name:SetJustifyH("LEFT")
     name:SetText(totemData.name:gsub(" Totem", ""))
+    row.nameText = name
+
+    -- Hide/show toggle button
+    local hideBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    hideBtn:SetSize(16, 16)
+    hideBtn:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+
+    local function UpdateHideState()
+        if IsTotemHidden(element, totemData.name) then
+            hideBtn:SetText("O")
+            row.icon:SetAlpha(0.4)
+            row.nameText:SetAlpha(0.4)
+        else
+            hideBtn:SetText("X")
+            row.icon:SetAlpha(1)
+            row.nameText:SetAlpha(1)
+        end
+    end
+
+    hideBtn:SetScript("OnClick", function()
+        local hidden = TotemDeckDB.hiddenTotems[element]
+        if IsTotemHidden(element, totemData.name) then
+            -- Remove from hidden list
+            for i, hiddenName in ipairs(hidden) do
+                if hiddenName == totemData.name then
+                    table.remove(hidden, i)
+                    break
+                end
+            end
+        else
+            -- Add to hidden list
+            table.insert(hidden, totemData.name)
+        end
+        UpdateHideState()
+    end)
+
+    hideBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        if IsTotemHidden(element, totemData.name) then
+            GameTooltip:SetText("Click to show in popup")
+        else
+            GameTooltip:SetText("Click to hide from popup")
+        end
+        GameTooltip:Show()
+    end)
+    hideBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    UpdateHideState()
+    row.hideBtn = hideBtn
 
     return row
 end
@@ -1096,9 +1166,10 @@ local function CreateConfigWindow()
         -- Reset element order
         TotemDeckDB.elementOrder = { "Earth", "Fire", "Water", "Air" }
         RefreshElementOrderButtons()
-        -- Reset totem order within each element
+        -- Reset totem order and hidden totems within each element
         for _, element in ipairs(ELEMENT_ORDER) do
             TotemDeckDB.totemOrder[element] = {}
+            TotemDeckDB.hiddenTotems[element] = {}
             PopulateConfigSection(sections[element].scrollChild, element)
         end
         print("|cFF00FF00TotemDeck:|r Order reset to default")
@@ -1609,6 +1680,15 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         for _, element in ipairs(ELEMENT_ORDER) do
             if not TotemDeckDB.totemOrder[element] then
                 TotemDeckDB.totemOrder[element] = {}
+            end
+        end
+        -- Ensure hiddenTotems has all element keys
+        if not TotemDeckDB.hiddenTotems then
+            TotemDeckDB.hiddenTotems = {}
+        end
+        for _, element in ipairs(ELEMENT_ORDER) do
+            if not TotemDeckDB.hiddenTotems[element] then
+                TotemDeckDB.hiddenTotems[element] = {}
             end
         end
 

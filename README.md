@@ -14,6 +14,7 @@ A lightweight shaman totem management addon for WoW Classic TBC. Hover over any 
 - **Totem timers** - Duration bars show remaining time on active totems
 - **Custom element order** - Rearrange element groups (Earth, Fire, Water, Air) in any order
 - **Custom totem order** - Rearrange totems within each element via the config window
+- **Hide totems** - Hide specific totems you don't use from the popup
 - **Full configuration UI** - Tabbed config window with Layout and Totem Order settings
 - **Quick options menu** - Alt+click the bar for fast access to common settings
 - **Macro support** - Creates macros (TDEarth, TDFire, TDWater, TDAir) that cast your active totems
@@ -48,8 +49,9 @@ Open with `/td config` or via "Show Full Config..." in the quick menu.
 **Totem Order Tab:**
 - Element Order - Rearrange the element groups using arrow buttons
 - Totem Order - Reorder totems within each element using up/down buttons
+- Hide Totems - Click the X button on any totem to hide it from the popup (O to show again)
 - Click "Apply" to update the display
-- Click "Reset to Default" to restore original order
+- Click "Reset to Default" to restore original order and show all hidden totems
 
 ### Quick Options Menu
 Alt+click the bar to access:
