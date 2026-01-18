@@ -106,6 +106,15 @@ local function GetTotemData(totemName)
     return nil, nil
 end
 
+-- Check if a totem spell is trained
+local function IsTotemKnown(totemName)
+    local name, _, _, _, _, _, spellID = GetSpellInfo(totemName)
+    if not spellID then
+        return false
+    end
+    return IsPlayerSpell(spellID)
+end
+
 -- Format time for display
 local function FormatTime(seconds)
     if seconds >= 60 then
@@ -446,11 +455,24 @@ end
 
 -- Create popup column/row for a specific element (called after main bar button exists)
 local function CreatePopupColumn(element, anchorButton)
-    local totems = TOTEMS[element]
-    local numTotems = #totems
+    local allTotems = TOTEMS[element]
     local color = ELEMENT_COLORS[element]
     local direction = TotemDeckDB.popupDirection or "UP"
     local isHorizontal = (direction == "LEFT" or direction == "RIGHT")
+
+    -- Filter to only trained totems
+    local totems = {}
+    for _, totemData in ipairs(allTotems) do
+        if IsTotemKnown(totemData.name) then
+            table.insert(totems, totemData)
+        end
+    end
+    local numTotems = #totems
+
+    -- If no totems trained for this element, don't create a popup
+    if numTotems == 0 then
+        return nil
+    end
 
     -- Create container anchored to the main bar button
     local container = CreateFrame("Frame", nil, anchorButton, "BackdropTemplate")
