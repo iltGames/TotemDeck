@@ -256,7 +256,6 @@ UpdateActiveTotemButton = function(element)
 
     if totemData then
         btn:SetAttribute("spell1", totemName)
-        btn:SetAttribute("spell2", totemName)
         btn.icon:SetTexture(totemData.icon)
         btn.totemName = totemName
     end
@@ -740,14 +739,21 @@ local function CreateActionBarFrame()
 
         -- Set up secure casting (but not when ctrl is held)
         btn:SetAttribute("type1", "spell")
-        btn:SetAttribute("type2", "spell")
         btn:SetAttribute("ctrl-type1", nil) -- Do nothing on ctrl+click
-        btn:SetAttribute("ctrl-type2", nil)
         if totemData then
             btn:SetAttribute("spell1", totemName)
-            btn:SetAttribute("spell2", totemName)
             btn.totemName = totemName
         end
+
+        -- Right-click to dismiss totem
+        btn:HookScript("PostClick", function(self, button)
+            if button == "RightButton" then
+                local slot = TOTEM_SLOTS[self.element]
+                if slot then
+                    DestroyTotem(slot)
+                end
+            end
+        end)
 
         -- Ctrl+click to move the frame, Alt+click for options
         btn:HookScript("OnMouseDown", function(self, button)
@@ -767,10 +773,22 @@ local function CreateActionBarFrame()
         btn:SetScript("OnEnter", function(self)
             self.border:SetBackdropBorderColor(1, 1, 1, 1)
             ShowPopup(self.element, self)
+            -- Show tooltip
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            if self.totemName then
+                GameTooltip:SetText(self.totemName, 1, 1, 1)
+            else
+                GameTooltip:SetText(self.element .. " Totem", 1, 1, 1)
+            end
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Left-click to cast", 0.5, 0.5, 0.5)
+            GameTooltip:AddLine("Right-click to dismiss", 0.5, 0.5, 0.5)
+            GameTooltip:Show()
         end)
 
         btn:SetScript("OnLeave", function(self)
             self.border:SetBackdropBorderColor(color.r, color.g, color.b, 1)
+            GameTooltip:Hide()
             -- Popup hides via OnUpdate check
         end)
 
