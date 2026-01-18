@@ -351,6 +351,9 @@ local function CreatePopupButton(parent, totemData, element, index)
     btn.totemName = totemData.name
     btn.totemDuration = totemData.duration
     btn.element = element
+    -- Get spell ID for tooltip
+    local _, _, _, _, _, _, spellID = GetSpellInfo(totemData.name)
+    btn.spellID = spellID
 
     -- Register for clicks
     btn:RegisterForClicks("AnyDown", "AnyUp")
@@ -373,10 +376,14 @@ local function CreatePopupButton(parent, totemData, element, index)
         -- Then highlight this specific button
         self.border:SetBackdropBorderColor(1, 1, 1, 1)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(self.totemName, 1, 1, 1)
-        GameTooltip:AddLine("Duration: " .. FormatTime(self.totemDuration), 0.7, 0.7, 0.7)
+        if self.spellID then
+            GameTooltip:SetSpellByID(self.spellID)
+        else
+            GameTooltip:SetText(self.totemName, 1, 1, 1)
+        end
         local activeKey = "active" .. self.element
         if TotemDeckDB[activeKey] == self.totemName then
+            GameTooltip:AddLine(" ")
             GameTooltip:AddLine("(Active)", 0, 1, 0)
         end
         GameTooltip:AddLine(" ")
@@ -1269,10 +1276,15 @@ local function CreateActionBarFrame()
         btn:SetScript("OnEnter", function(self)
             self.border:SetBackdropBorderColor(1, 1, 1, 1)
             ShowPopup(self.element, self)
-            -- Show tooltip
+            -- Show tooltip using spell info
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             if self.totemName then
-                GameTooltip:SetText(self.totemName, 1, 1, 1)
+                local _, _, _, _, _, _, spellID = GetSpellInfo(self.totemName)
+                if spellID then
+                    GameTooltip:SetSpellByID(spellID)
+                else
+                    GameTooltip:SetText(self.totemName, 1, 1, 1)
+                end
             else
                 GameTooltip:SetText(self.element .. " Totem", 1, 1, 1)
             end
