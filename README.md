@@ -11,7 +11,9 @@ A lightweight shaman totem management addon for WoW Classic TBC. Hover over any 
 - **Quick casting** - Left-click any totem to cast it instantly
 - **Quick dismiss** - Right-click the main element button to dismiss that totem
 - **Active totem selection** - Right-click a popup totem to set it as your preferred totem for that element (works in combat)
-- **Totem timers** - Duration bars show remaining time on active totems
+- **Placed totem indicator** - When a placed totem differs from your active selection, shows the placed totem with a desaturated icon and gray border
+- **Totem timers** - Duration display with two styles: traditional bars or compact icon text
+- **Timer styles** - Choose between bar timers (separate timer bars) or icon timers (countdown text under each button)
 - **Custom element order** - Rearrange element groups (Earth, Fire, Water, Air) in any order
 - **Custom totem order** - Rearrange totems within each element via the config window
 - **Hide totems** - Hide specific totems you don't use from the popup
@@ -41,6 +43,7 @@ Open with `/td config` or via "Show Full Config..." in the quick menu.
 **Layout Tab:**
 - Popup Direction (Up/Down/Left/Right)
 - Timer Position (Above/Below/Left/Right)
+- Timer Style (Bars/Icons)
 - Show Timers toggle
 - Lock Bar Position toggle
 - Always Show Popup toggle
@@ -57,6 +60,7 @@ Open with `/td config` or via "Show Full Config..." in the quick menu.
 Alt+click the bar to access:
 - Popup direction
 - Timer position
+- Timer style
 - Show/hide timers
 - Lock/unlock position
 - Always show popup

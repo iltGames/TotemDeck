@@ -14,6 +14,7 @@ local defaults = {
     locked = false,
     popupDirection = "UP", -- UP, DOWN, LEFT, RIGHT
     timerPosition = "ABOVE", -- ABOVE, BELOW, LEFT, RIGHT
+    timerStyle = "bars", -- "bars" or "icons"
     alwaysShowPopup = false, -- Always show popup bars instead of on hover
     elementOrder = { "Earth", "Fire", "Water", "Air" }, -- Order of element groups
     totemOrder = { -- Custom totem order per element (empty = use default)
@@ -824,7 +825,7 @@ local function CreateConfigWindow()
     end
 
     local frame = CreateFrame("Frame", "TotemDeckConfigWindow", UIParent, "BackdropTemplate")
-    frame:SetSize(420, 420)
+    frame:SetSize(420, 480)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
     frame:SetMovable(true)
@@ -970,8 +971,18 @@ local function CreateConfigWindow()
         RebuildTimerFrame()
     end)
 
+    -- Timer Style
+    local timerStyleSection = CreateLayoutSection(layoutContent, "Timer Style", -160, 50)
+    frame.timerStyleButtons = CreateRadioGroup(timerStyleSection, {
+        { label = "Bars", value = "bars" },
+        { label = "Icons", value = "icons" },
+    }, TotemDeckDB.timerStyle or "bars", -28, function(value)
+        TotemDeckDB.timerStyle = value
+        UpdateTimers()
+    end)
+
     -- Options
-    local optionsSection = CreateLayoutSection(layoutContent, "Options", -160, 115)
+    local optionsSection = CreateLayoutSection(layoutContent, "Options", -220, 115)
 
     local showTimersCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
     showTimersCheck:SetPoint("TOPLEFT", 10, -28)
@@ -1265,6 +1276,14 @@ local function InitializeOptionsMenu(self, level, menuList)
         info.menuList = "TIMER_POS"
         UIDropDownMenu_AddButton(info, level)
 
+        -- Timer Style submenu
+        info = UIDropDownMenu_CreateInfo()
+        info.text = "Timer Style"
+        info.notCheckable = true
+        info.hasArrow = true
+        info.menuList = "TIMER_STYLE"
+        UIDropDownMenu_AddButton(info, level)
+
         -- Spacer
         info = UIDropDownMenu_CreateInfo()
         info.text = ""
@@ -1370,6 +1389,19 @@ local function InitializeOptionsMenu(self, level, menuList)
                     TotemDeckDB.timerPosition = pos[2]
                     CloseDropDownMenus()
                     RebuildTimerFrame()
+                end
+                UIDropDownMenu_AddButton(info, level)
+            end
+        elseif menuList == "TIMER_STYLE" then
+            local styles = { { "Bars", "bars" }, { "Icons", "icons" } }
+            for _, style in ipairs(styles) do
+                info = UIDropDownMenu_CreateInfo()
+                info.text = style[1]
+                info.checked = ((TotemDeckDB.timerStyle or "bars") == style[2])
+                info.func = function()
+                    TotemDeckDB.timerStyle = style[2]
+                    CloseDropDownMenus()
+                    UpdateTimers()
                 end
                 UIDropDownMenu_AddButton(info, level)
             end
@@ -1500,7 +1532,17 @@ local function CreateActionBarFrame()
             ShowPopup(self.element, self)
             -- Show tooltip using spell info
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            if self.totemName then
+            if self.showingPlaced and self.placedTotemName then
+                -- Show placed totem info
+                local _, _, _, _, _, _, spellID = GetSpellInfo(self.placedTotemName)
+                if spellID then
+                    GameTooltip:SetSpellByID(spellID)
+                else
+                    GameTooltip:SetText(self.placedTotemName, 1, 1, 1)
+                end
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine("Currently placed (not your active totem)", 0.7, 0.7, 0.7)
+            elseif self.totemName then
                 local _, _, _, _, _, _, spellID = GetSpellInfo(self.totemName)
                 if spellID then
                     GameTooltip:SetSpellByID(spellID)
@@ -1517,7 +1559,11 @@ local function CreateActionBarFrame()
         end)
 
         btn:SetScript("OnLeave", function(self)
-            self.border:SetBackdropBorderColor(color.r, color.g, color.b, 1)
+            if self.showingPlaced then
+                self.border:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+            else
+                self.border:SetBackdropBorderColor(color.r, color.g, color.b, 1)
+            end
             GameTooltip:Hide()
             -- Popup hides via OnUpdate check
         end)
@@ -1525,6 +1571,19 @@ local function CreateActionBarFrame()
         btn.element = element
         btn.color = color
         activeTotemButtons[element] = btn
+
+        -- Icon timer display (shown when timerStyle == "icons")
+        local iconTimer = CreateFrame("Frame", nil, btn)
+        iconTimer:SetSize(40, 16)
+        iconTimer:SetPoint("TOP", btn, "BOTTOM", 0, -2)
+
+        local iconTimerText = iconTimer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        iconTimerText:SetPoint("CENTER")
+        iconTimerText:SetTextColor(1, 1, 1)
+
+        btn.iconTimer = iconTimer
+        btn.iconTimerText = iconTimerText
+        iconTimer:Hide()
 
         -- Create popup column for this element (anchored to this button)
         CreatePopupColumn(element, btn)
@@ -1582,6 +1641,8 @@ end
 -- Update timer bars
 UpdateTimers = function()
     local anyActive = false
+    local timerStyle = TotemDeckDB.timerStyle or "bars"
+    local showTimers = TotemDeckDB.showTimers
 
     for slot = 1, 4 do
         local haveTotem, totemName, startTime, duration = GetTotemInfo(slot)
@@ -1595,30 +1656,97 @@ UpdateTimers = function()
             end
         end
 
-        if element and timerBars[element] then
+        if element then
             local bar = timerBars[element]
+            local btn = activeTotemButtons[element]
+            local activeTotemName = TotemDeckDB["active" .. element]
 
             if haveTotem and duration > 0 then
                 local remaining = (startTime + duration) - GetTime()
 
                 if remaining > 0 then
                     anyActive = true
-                    bar:Show()
-                    bar.statusBar:SetMinMaxValues(0, duration)
-                    bar.statusBar:SetValue(remaining)
-                    bar.text:SetText(totemName:gsub(" Totem", ""))
-                    bar.timeText:SetText(FormatTime(math.floor(remaining)))
 
+                    -- Update bar timer (bars mode)
+                    if bar and timerStyle == "bars" then
+                        bar:Show()
+                        bar.statusBar:SetMinMaxValues(0, duration)
+                        bar.statusBar:SetValue(remaining)
+                        bar.text:SetText(totemName:gsub(" Totem", ""))
+                        bar.timeText:SetText(FormatTime(math.floor(remaining)))
+                    elseif bar then
+                        bar:Hide()
+                    end
+
+                    -- Update icon timer (icons mode)
+                    if btn and btn.iconTimer then
+                        if timerStyle == "icons" and showTimers then
+                            btn.iconTimerText:SetText(FormatTime(math.floor(remaining)))
+                            btn.iconTimer:Show()
+                        else
+                            btn.iconTimer:Hide()
+                        end
+                    end
+
+                    -- Update button to show placed totem (if different from active)
+                    if btn then
+                        if totemName ~= activeTotemName then
+                            -- Placed totem differs from active - show with visual indicator
+                            local placedIcon = GetSpellTexture(totemName)
+                            if placedIcon then
+                                btn.icon:SetTexture(placedIcon)
+                                btn.icon:SetDesaturated(true)
+                                btn.border:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+                                btn.showingPlaced = true
+                                btn.placedTotemName = totemName
+                            end
+                        elseif btn.showingPlaced then
+                            -- Placed totem matches active - revert to normal display
+                            local activeIcon = GetSpellTexture(activeTotemName)
+                            if activeIcon then
+                                btn.icon:SetTexture(activeIcon)
+                            end
+                            btn.icon:SetDesaturated(false)
+                            btn.border:SetBackdropBorderColor(btn.color.r, btn.color.g, btn.color.b, 1)
+                            btn.showingPlaced = false
+                            btn.placedTotemName = nil
+                        end
+                    end
                 else
-                    bar:Hide()
+                    if bar then bar:Hide() end
+                    if btn and btn.iconTimer then btn.iconTimer:Hide() end
+                    -- Revert button display when totem expires
+                    if btn and btn.showingPlaced then
+                        local activeIcon = GetSpellTexture(activeTotemName)
+                        if activeIcon then
+                            btn.icon:SetTexture(activeIcon)
+                        end
+                        btn.icon:SetDesaturated(false)
+                        btn.border:SetBackdropBorderColor(btn.color.r, btn.color.g, btn.color.b, 1)
+                        btn.showingPlaced = false
+                        btn.placedTotemName = nil
+                    end
                 end
             else
-                bar:Hide()
+                if bar then bar:Hide() end
+                if btn and btn.iconTimer then btn.iconTimer:Hide() end
+                -- Revert button display when no totem placed
+                if btn and btn.showingPlaced then
+                    local activeIcon = GetSpellTexture(activeTotemName)
+                    if activeIcon then
+                        btn.icon:SetTexture(activeIcon)
+                    end
+                    btn.icon:SetDesaturated(false)
+                    btn.border:SetBackdropBorderColor(btn.color.r, btn.color.g, btn.color.b, 1)
+                    btn.showingPlaced = false
+                    btn.placedTotemName = nil
+                end
             end
         end
     end
 
-    if anyActive and TotemDeckDB.showTimers then
+    -- Show/hide bar timer frame
+    if anyActive and showTimers and timerStyle == "bars" then
         timerFrame:Show()
         -- Resize timer frame based on visible bars
         local visibleCount = 0
