@@ -86,7 +86,7 @@ local popupVisible = false
 local popupHideDelay = 0
 
 -- Forward declarations
-local RebuildPopupColumns, RebuildTimerFrame, CreateTotemMacros
+local RebuildPopupColumns, RebuildTimerFrame, CreateTotemMacros, ShowPopup
 
 -- Utility: Check if player is a Shaman
 local function IsShaman()
@@ -318,6 +318,9 @@ local function CreatePopupButton(parent, totemData, element, index)
 
     -- Tooltip (to the right of the button)
     btn:SetScript("OnEnter", function(self)
+        -- Highlight entire column for this element
+        ShowPopup(self.element)
+        -- Then highlight this specific button
         self.border:SetBackdropBorderColor(1, 1, 1, 1)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(self.totemName, 1, 1, 1)
@@ -333,12 +336,13 @@ local function CreatePopupButton(parent, totemData, element, index)
     end)
 
     btn:SetScript("OnLeave", function(self)
-        -- Restore green border if this is the active totem, otherwise gray
+        -- Restore border color based on active state (ShowPopup will have set element colors)
         local activeKey = "active" .. self.element
+        local color = ELEMENT_COLORS[self.element]
         if TotemDeckDB[activeKey] == self.totemName then
             self.border:SetBackdropBorderColor(0, 1, 0, 1)
         else
-            self.border:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+            self.border:SetBackdropBorderColor(color.r, color.g, color.b, 0.8)
         end
         GameTooltip:Hide()
     end)
@@ -346,8 +350,8 @@ local function CreatePopupButton(parent, totemData, element, index)
     return btn
 end
 
--- Show all popup columns (called when hovering any main bar button)
-local function ShowPopup(hoveredElement)
+-- Show all popup columns (called when hovering any main bar button or popup button)
+ShowPopup = function(hoveredElement)
     popupVisible = true
     popupHideDelay = 0
 
