@@ -14,6 +14,12 @@ local defaults = {
     locked = false,
     popupDirection = "UP", -- UP, DOWN, LEFT, RIGHT
     timerPosition = "ABOVE", -- ABOVE, BELOW, LEFT, RIGHT
+    totemOrder = { -- Custom totem order per element (empty = use default)
+        Earth = {},
+        Fire = {},
+        Water = {},
+        Air = {},
+    },
 }
 
 -- Totem data: name, duration in seconds, icon
@@ -113,6 +119,41 @@ local function IsTotemKnown(totemName)
         return false
     end
     return IsPlayerSpell(spellID)
+end
+
+-- Get totems for an element in custom order (if set)
+local function GetOrderedTotems(element)
+    local savedOrder = TotemDeckDB and TotemDeckDB.totemOrder and TotemDeckDB.totemOrder[element]
+    if not savedOrder or #savedOrder == 0 then
+        return TOTEMS[element] -- Use default order
+    end
+
+    -- Build ordered list from saved names
+    local ordered = {}
+    for _, name in ipairs(savedOrder) do
+        for _, totem in ipairs(TOTEMS[element]) do
+            if totem.name == name then
+                table.insert(ordered, totem)
+                break
+            end
+        end
+    end
+
+    -- Add any totems not in saved order (e.g., newly added)
+    for _, totem in ipairs(TOTEMS[element]) do
+        local found = false
+        for _, name in ipairs(savedOrder) do
+            if totem.name == name then
+                found = true
+                break
+            end
+        end
+        if not found then
+            table.insert(ordered, totem)
+        end
+    end
+
+    return ordered
 end
 
 -- Format time for display
@@ -455,7 +496,7 @@ end
 
 -- Create popup column/row for a specific element (called after main bar button exists)
 local function CreatePopupColumn(element, anchorButton)
-    local allTotems = TOTEMS[element]
+    local allTotems = GetOrderedTotems(element) -- Use custom order if set
     local color = ELEMENT_COLORS[element]
     local direction = TotemDeckDB.popupDirection or "UP"
     local isHorizontal = (direction == "LEFT" or direction == "RIGHT")
@@ -568,6 +609,425 @@ local function SetupPopupSystem()
     end)
 end
 
+-- Configuration Window for totem reordering and layout settings
+local configWindow = nil
+local configTotemRows = {} -- Stores row frames for each element
+
+local function SaveTotemOrder(element)
+    local order = {}
+    for _, row in ipairs(configTotemRows[element] or {}) do
+        if row.totemName then
+            table.insert(order, row.totemName)
+        end
+    end
+    TotemDeckDB.totemOrder[element] = order
+end
+
+local function RefreshConfigList(element)
+    local rows = configTotemRows[element]
+    if not rows then return end
+
+    for i, row in ipairs(rows) do
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", row:GetParent(), "TOPLEFT", 0, -((i - 1) * 24))
+        row.upBtn:SetEnabled(i > 1)
+        row.downBtn:SetEnabled(i < #rows)
+    end
+end
+
+local function MoveTotemUp(element, rowIndex)
+    local rows = configTotemRows[element]
+    if rowIndex <= 1 then return end
+    rows[rowIndex], rows[rowIndex - 1] = rows[rowIndex - 1], rows[rowIndex]
+    RefreshConfigList(element)
+    SaveTotemOrder(element)
+end
+
+local function MoveTotemDown(element, rowIndex)
+    local rows = configTotemRows[element]
+    if rowIndex >= #rows then return end
+    rows[rowIndex], rows[rowIndex + 1] = rows[rowIndex + 1], rows[rowIndex]
+    RefreshConfigList(element)
+    SaveTotemOrder(element)
+end
+
+local function CreateTotemRow(parent, totemData, element, index)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(170, 22)
+    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -((index - 1) * 24))
+    row.totemName = totemData.name
+
+    local upBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    upBtn:SetSize(20, 20)
+    upBtn:SetPoint("LEFT", 0, 0)
+    upBtn:SetText("^")
+    upBtn:SetScript("OnClick", function()
+        for i, r in ipairs(configTotemRows[element]) do
+            if r == row then
+                MoveTotemUp(element, i)
+                break
+            end
+        end
+    end)
+    row.upBtn = upBtn
+
+    local downBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    downBtn:SetSize(20, 20)
+    downBtn:SetPoint("LEFT", upBtn, "RIGHT", 2, 0)
+    downBtn:SetText("v")
+    downBtn:SetScript("OnClick", function()
+        for i, r in ipairs(configTotemRows[element]) do
+            if r == row then
+                MoveTotemDown(element, i)
+                break
+            end
+        end
+    end)
+    row.downBtn = downBtn
+
+    local icon = row:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(18, 18)
+    icon:SetPoint("LEFT", downBtn, "RIGHT", 4, 0)
+    icon:SetTexture(GetSpellTexture(totemData.name) or totemData.icon)
+
+    local name = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    name:SetPoint("LEFT", icon, "RIGHT", 4, 0)
+    name:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    name:SetJustifyH("LEFT")
+    name:SetText(totemData.name:gsub(" Totem", ""))
+
+    return row
+end
+
+local function PopulateConfigSection(parent, element)
+    if configTotemRows[element] then
+        for _, row in ipairs(configTotemRows[element]) do
+            row:Hide()
+            row:SetParent(nil)
+        end
+    end
+    configTotemRows[element] = {}
+
+    local totems = GetOrderedTotems(element)
+    for i, totemData in ipairs(totems) do
+        local row = CreateTotemRow(parent, totemData, element, i)
+        configTotemRows[element][i] = row
+    end
+    RefreshConfigList(element)
+end
+
+local function CreateConfigWindow()
+    if configWindow then
+        return configWindow
+    end
+
+    local frame = CreateFrame("Frame", "TotemDeckConfigWindow", UIParent, "BackdropTemplate")
+    frame:SetSize(420, 420)
+    frame:SetPoint("CENTER")
+    frame:SetFrameStrata("DIALOG")
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+
+    frame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    frame:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
+    frame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOP", 0, -12)
+    title:SetText("TotemDeck Configuration")
+
+    local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", -2, -2)
+    closeBtn:SetScript("OnClick", function() frame:Hide() end)
+
+    -- Tab system
+    local tabs = {}
+    local tabContent = {}
+
+    local function SelectTab(tabName)
+        for name, tab in pairs(tabs) do
+            if name == tabName then
+                tab:SetBackdropColor(0.2, 0.2, 0.2, 1)
+                tab.text:SetTextColor(1, 1, 1)
+                tabContent[name]:Show()
+            else
+                tab:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+                tab.text:SetTextColor(0.6, 0.6, 0.6)
+                tabContent[name]:Hide()
+            end
+        end
+        frame.activeTab = tabName
+    end
+
+    local function CreateTab(name, displayName, xOffset)
+        local tab = CreateFrame("Button", nil, frame, "BackdropTemplate")
+        tab:SetSize(100, 28)
+        tab:SetPoint("TOPLEFT", frame, "TOPLEFT", xOffset, -32)
+        tab:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        tab:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+        tab:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+
+        local text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        text:SetPoint("CENTER")
+        text:SetText(displayName)
+        tab.text = text
+
+        tab:SetScript("OnClick", function() SelectTab(name) end)
+        tabs[name] = tab
+        return tab
+    end
+
+    CreateTab("layout", "Layout", 15)
+    CreateTab("ordering", "Totem Order", 120)
+
+    local contentFrame = CreateFrame("Frame", nil, frame)
+    contentFrame:SetPoint("TOPLEFT", 15, -65)
+    contentFrame:SetPoint("BOTTOMRIGHT", -15, 15)
+
+    --------------------------
+    -- LAYOUT TAB
+    --------------------------
+    local layoutContent = CreateFrame("Frame", nil, contentFrame)
+    layoutContent:SetAllPoints()
+    tabContent["layout"] = layoutContent
+
+    local function CreateLayoutSection(parent, sectionTitle, yOffset, height)
+        local section = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+        section:SetSize(380, height)
+        section:SetPoint("TOP", parent, "TOP", 0, yOffset)
+        section:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        section:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
+        section:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+
+        local label = section:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetPoint("TOPLEFT", 10, -8)
+        label:SetText(sectionTitle)
+        label:SetTextColor(1, 0.82, 0)
+
+        return section
+    end
+
+    local function CreateRadioGroup(parent, options, currentValue, yOffset, onChange)
+        local buttons = {}
+        for i, opt in ipairs(options) do
+            local btn = CreateFrame("CheckButton", nil, parent, "UIRadioButtonTemplate")
+            btn:SetPoint("TOPLEFT", parent, "TOPLEFT", 10 + ((i-1) % 4) * 90, yOffset)
+            btn:SetScript("OnClick", function(self)
+                for _, b in ipairs(buttons) do b:SetChecked(false) end
+                self:SetChecked(true)
+                onChange(opt.value)
+            end)
+
+            local text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            text:SetPoint("LEFT", btn, "RIGHT", 2, 0)
+            text:SetText(opt.label)
+            btn.label = text
+            btn:SetChecked(currentValue == opt.value)
+            buttons[i] = btn
+        end
+        return buttons
+    end
+
+    -- Popup Direction
+    local popupSection = CreateLayoutSection(layoutContent, "Popup Direction", 0, 70)
+    frame.popupDirButtons = CreateRadioGroup(popupSection, {
+        { label = "Up", value = "UP" },
+        { label = "Down", value = "DOWN" },
+        { label = "Left", value = "LEFT" },
+        { label = "Right", value = "RIGHT" },
+    }, TotemDeckDB.popupDirection or "UP", -28, function(value)
+        TotemDeckDB.popupDirection = value
+        if not InCombatLockdown() then RebuildPopupColumns() end
+    end)
+
+    -- Timer Position
+    local timerSection = CreateLayoutSection(layoutContent, "Timer Position", -80, 70)
+    frame.timerPosButtons = CreateRadioGroup(timerSection, {
+        { label = "Above", value = "ABOVE" },
+        { label = "Below", value = "BELOW" },
+        { label = "Left", value = "LEFT" },
+        { label = "Right", value = "RIGHT" },
+    }, TotemDeckDB.timerPosition or "ABOVE", -28, function(value)
+        TotemDeckDB.timerPosition = value
+        RebuildTimerFrame()
+    end)
+
+    -- Options
+    local optionsSection = CreateLayoutSection(layoutContent, "Options", -160, 90)
+
+    local showTimersCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
+    showTimersCheck:SetPoint("TOPLEFT", 10, -28)
+    showTimersCheck:SetChecked(TotemDeckDB.showTimers)
+    showTimersCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.showTimers = self:GetChecked()
+        if not TotemDeckDB.showTimers and timerFrame then
+            timerFrame:Hide()
+        elseif TotemDeckDB.showTimers then
+            UpdateTimers()
+        end
+    end)
+    local showTimersLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    showTimersLabel:SetPoint("LEFT", showTimersCheck, "RIGHT", 4, 0)
+    showTimersLabel:SetText("Show Timers")
+    frame.showTimersCheck = showTimersCheck
+
+    local lockPosCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
+    lockPosCheck:SetPoint("TOPLEFT", 10, -54)
+    lockPosCheck:SetChecked(TotemDeckDB.locked)
+    lockPosCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.locked = self:GetChecked()
+    end)
+    local lockPosLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    lockPosLabel:SetPoint("LEFT", lockPosCheck, "RIGHT", 4, 0)
+    lockPosLabel:SetText("Lock Bar Position")
+    frame.lockPosCheck = lockPosCheck
+
+    local macrosBtn = CreateFrame("Button", nil, optionsSection, "UIPanelButtonTemplate")
+    macrosBtn:SetSize(120, 22)
+    macrosBtn:SetPoint("TOPRIGHT", optionsSection, "TOPRIGHT", -10, -30)
+    macrosBtn:SetText("Recreate Macros")
+    macrosBtn:SetScript("OnClick", function()
+        CreateTotemMacros()
+        print("|cFF00FF00TotemDeck:|r Macros recreated")
+    end)
+
+    --------------------------
+    -- ORDERING TAB
+    --------------------------
+    local orderingContent = CreateFrame("Frame", nil, contentFrame)
+    orderingContent:SetAllPoints()
+    tabContent["ordering"] = orderingContent
+
+    local sectionWidth = 185
+    local sectionHeight = 140
+    local sections = {}
+
+    for i, element in ipairs(ELEMENT_ORDER) do
+        local color = ELEMENT_COLORS[element]
+        local col = (i - 1) % 2
+        local row = math.floor((i - 1) / 2)
+
+        local section = CreateFrame("Frame", nil, orderingContent, "BackdropTemplate")
+        section:SetSize(sectionWidth, sectionHeight)
+        section:SetPoint("TOPLEFT", orderingContent, "TOPLEFT", col * (sectionWidth + 10), -row * (sectionHeight + 10))
+        section:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        section:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
+        section:SetBackdropBorderColor(color.r, color.g, color.b, 1)
+
+        local label = section:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetPoint("TOP", 0, -4)
+        label:SetText(element)
+        label:SetTextColor(color.r, color.g, color.b)
+
+        local scrollFrame = CreateFrame("ScrollFrame", nil, section, "UIPanelScrollFrameTemplate")
+        scrollFrame:SetPoint("TOPLEFT", 8, -22)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -28, 8)
+
+        local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+        scrollChild:SetSize(sectionWidth - 40, 200)
+        scrollFrame:SetScrollChild(scrollChild)
+
+        section.scrollChild = scrollChild
+        section.element = element
+        sections[element] = section
+    end
+
+    local orderButtonContainer = CreateFrame("Frame", nil, orderingContent)
+    orderButtonContainer:SetSize(380, 30)
+    orderButtonContainer:SetPoint("BOTTOM", orderingContent, "BOTTOM", 0, 0)
+
+    local resetBtn = CreateFrame("Button", nil, orderButtonContainer, "UIPanelButtonTemplate")
+    resetBtn:SetSize(120, 24)
+    resetBtn:SetPoint("RIGHT", orderButtonContainer, "CENTER", 65, 0)
+    resetBtn:SetText("Reset to Default")
+    resetBtn:SetScript("OnClick", function()
+        for _, element in ipairs(ELEMENT_ORDER) do
+            TotemDeckDB.totemOrder[element] = {}
+            PopulateConfigSection(sections[element].scrollChild, element)
+        end
+        print("|cFF00FF00TotemDeck:|r Totem order reset to default")
+    end)
+
+    local applyBtn = CreateFrame("Button", nil, orderButtonContainer, "UIPanelButtonTemplate")
+    applyBtn:SetSize(100, 24)
+    applyBtn:SetPoint("RIGHT", resetBtn, "LEFT", -10, 0)
+    applyBtn:SetText("Apply")
+    applyBtn:SetScript("OnClick", function()
+        if InCombatLockdown() then
+            print("|cFF00FF00TotemDeck:|r Cannot apply changes in combat")
+            return
+        end
+        RebuildPopupColumns()
+        print("|cFF00FF00TotemDeck:|r Totem order applied")
+    end)
+
+    frame.sections = sections
+    frame.tabContent = tabContent
+    frame:Hide()
+
+    SelectTab("layout")
+
+    configWindow = frame
+    return frame
+end
+
+local function RefreshConfigWindowState()
+    if not configWindow then return end
+
+    local popupDir = TotemDeckDB.popupDirection or "UP"
+    local popupDirValues = { "UP", "DOWN", "LEFT", "RIGHT" }
+    for i, btn in ipairs(configWindow.popupDirButtons or {}) do
+        btn:SetChecked(popupDirValues[i] == popupDir)
+    end
+
+    local timerPos = TotemDeckDB.timerPosition or "ABOVE"
+    local timerPosValues = { "ABOVE", "BELOW", "LEFT", "RIGHT" }
+    for i, btn in ipairs(configWindow.timerPosButtons or {}) do
+        btn:SetChecked(timerPosValues[i] == timerPos)
+    end
+
+    if configWindow.showTimersCheck then
+        configWindow.showTimersCheck:SetChecked(TotemDeckDB.showTimers)
+    end
+    if configWindow.lockPosCheck then
+        configWindow.lockPosCheck:SetChecked(TotemDeckDB.locked)
+    end
+end
+
+local function ToggleConfigWindow()
+    local frame = CreateConfigWindow()
+
+    if frame:IsShown() then
+        frame:Hide()
+    else
+        RefreshConfigWindowState()
+        for element, section in pairs(frame.sections) do
+            PopulateConfigSection(section.scrollChild, element)
+        end
+        frame:Show()
+    end
+end
+
 -- Options menu
 local optionsMenu = CreateFrame("Frame", "TotemDeckOptionsMenu", UIParent, "UIDropDownMenuTemplate")
 
@@ -631,6 +1091,16 @@ local function InitializeOptionsMenu(self, level, menuList)
         info.text = ""
         info.isTitle = true
         info.notCheckable = true
+        UIDropDownMenu_AddButton(info, level)
+
+        -- Show Full Config
+        info = UIDropDownMenu_CreateInfo()
+        info.text = "Show Full Config..."
+        info.notCheckable = true
+        info.func = function()
+            CloseDropDownMenus()
+            ToggleConfigWindow()
+        end
         UIDropDownMenu_AddButton(info, level)
 
         -- Recreate Macros
@@ -963,6 +1433,15 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
                 TotemDeckDB[key] = value
             end
         end
+        -- Ensure totemOrder has all element keys
+        if not TotemDeckDB.totemOrder then
+            TotemDeckDB.totemOrder = {}
+        end
+        for _, element in ipairs(ELEMENT_ORDER) do
+            if not TotemDeckDB.totemOrder[element] then
+                TotemDeckDB.totemOrder[element] = {}
+            end
+        end
 
     elseif event == "PLAYER_LOGIN" then
         if not IsShaman() then
@@ -1082,6 +1561,8 @@ SlashCmdList["TOTEMDECK"] = function(msg)
         end
     elseif cmd == "macros" then
         CreateTotemMacros()
+    elseif cmd == "config" then
+        ToggleConfigWindow()
     elseif cmd == "popup up" then
         TotemDeckDB.popupDirection = "UP"
         if RebuildPopupColumns() then
@@ -1123,6 +1604,7 @@ SlashCmdList["TOTEMDECK"] = function(msg)
         print("  /td show - Toggle bar visibility")
         print("  /td timers - Toggle timer display")
         print("  /td macros - Recreate macros")
+        print("  /td config - Open configuration window")
         print("  /td popup up|down|left|right - Set popup direction")
         print("  /td timers above|below|left|right - Set timer position")
     end
