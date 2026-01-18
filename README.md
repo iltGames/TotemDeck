@@ -8,16 +8,19 @@ A lightweight shaman totem management addon for WoW Classic TBC. Hover over any 
 - **Hover popup** - Mouse over any element to see all totems of that type
 - **Quick casting** - Left-click any totem to cast it instantly
 - **Active totem selection** - Right-click to set your preferred totem for each element
-- **Totem timers** - Duration bars appear above the bar when totems are active
+- **Totem timers** - Duration bars show remaining time on active totems
+- **Configurable layout** - Set popup direction (up/down/left/right) and timer position (above/below/left/right)
+- **Options menu** - Alt+click the bar for quick access to all settings
 - **Macro support** - Creates macros (TDEarth, TDFire, TDWater, TDAir) that cast your active totems
-- **Moveable** - Ctrl+click anywhere on the bar to reposition
+- **Moveable & lockable** - Ctrl+click to reposition, lock position via options menu
 
 ## Usage
 
 - **Hover** over an element to see all totems
 - **Left-click** a totem to cast it
 - **Right-click** a totem to set it as active for that element
-- **Ctrl+click** to move the bar
+- **Alt+click** the bar to open the options menu
+- **Ctrl+click** to move the bar (when unlocked)
 
 ## Slash Commands
 
@@ -26,6 +29,8 @@ A lightweight shaman totem management addon for WoW Classic TBC. Hover over any 
 | `/td` | Show help |
 | `/td show` | Toggle bar visibility |
 | `/td timers` | Toggle timer bars |
+| `/td timers above/below/left/right` | Set timer position |
+| `/td popup up/down/left/right` | Set popup direction |
 | `/td macros` | Create/update macros |
 
 ## Macros
