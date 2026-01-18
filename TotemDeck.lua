@@ -1692,24 +1692,28 @@ UpdateTimers = function()
                     if btn then
                         if totemName ~= activeTotemName then
                             -- Placed totem differs from active - show with visual indicator
-                            local placedIcon = GetSpellTexture(totemName)
+                            -- Strip rank suffix (e.g., "Magma Totem IV" -> "Magma Totem")
+                            local baseName = totemName:gsub("%s+[IVXLCDM]+$", "")
+                            local placedIcon = GetSpellTexture(baseName) or GetSpellTexture(totemName)
                             if placedIcon then
                                 btn.icon:SetTexture(placedIcon)
-                                btn.icon:SetDesaturated(true)
+                                btn.icon:SetVertexColor(0.6, 0.6, 0.6)
                                 btn.border:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
                                 btn.showingPlaced = true
                                 btn.placedTotemName = totemName
                             end
-                        elseif btn.showingPlaced then
-                            -- Placed totem matches active - revert to normal display
-                            local activeIcon = GetSpellTexture(activeTotemName)
-                            if activeIcon then
-                                btn.icon:SetTexture(activeIcon)
+                        else
+                            -- Placed totem matches active - ensure normal display
+                            if btn.showingPlaced then
+                                local activeIcon = GetSpellTexture(activeTotemName)
+                                if activeIcon then
+                                    btn.icon:SetTexture(activeIcon)
+                                end
+                                btn.showingPlaced = false
+                                btn.placedTotemName = nil
                             end
-                            btn.icon:SetDesaturated(false)
+                            btn.icon:SetVertexColor(1, 1, 1)
                             btn.border:SetBackdropBorderColor(btn.color.r, btn.color.g, btn.color.b, 1)
-                            btn.showingPlaced = false
-                            btn.placedTotemName = nil
                         end
                     end
                 else
@@ -1721,7 +1725,7 @@ UpdateTimers = function()
                         if activeIcon then
                             btn.icon:SetTexture(activeIcon)
                         end
-                        btn.icon:SetDesaturated(false)
+                        btn.icon:SetVertexColor(1, 1, 1)
                         btn.border:SetBackdropBorderColor(btn.color.r, btn.color.g, btn.color.b, 1)
                         btn.showingPlaced = false
                         btn.placedTotemName = nil
@@ -1736,7 +1740,7 @@ UpdateTimers = function()
                     if activeIcon then
                         btn.icon:SetTexture(activeIcon)
                     end
-                    btn.icon:SetDesaturated(false)
+                    btn.icon:SetVertexColor(1, 1, 1)
                     btn.border:SetBackdropBorderColor(btn.color.r, btn.color.g, btn.color.b, 1)
                     btn.showingPlaced = false
                     btn.placedTotemName = nil
