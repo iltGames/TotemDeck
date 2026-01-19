@@ -2453,8 +2453,8 @@ timerUpdateFrame:SetScript("OnUpdate", function(self, delta)
     elapsed = elapsed + delta
     if elapsed >= 0.1 then
         elapsed = 0
-        -- Update totem timers
-        if timerFrame and timerFrame:IsShown() then
+        -- Update totem timers (always run if timers enabled, for both bar and icon styles)
+        if TotemDeckDB and TotemDeckDB.showTimers then
             UpdateTimers()
         end
         -- Update weapon buff timer
