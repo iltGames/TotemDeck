@@ -206,7 +206,7 @@ CreateTotemMacros = function()
         -- Find icon and spell for current active totem
         local activeKey = "active" .. element
         local totemName = TotemDeckDB[activeKey]
-        local macroBody = "/cast " .. (totemName or "")
+        local macroBody = "#showtooltip\n/cast " .. (totemName or "")
 
         if totemName then
             for _, totem in ipairs(TOTEMS[element]) do
@@ -233,6 +233,29 @@ CreateTotemMacros = function()
             end
         end
     end
+
+    -- Create sequence macro (TDAll) - drops all 4 active totems in order
+    local sequenceName = "TDAll"
+    local sequenceIcon = "INV_Misc_QuestionMark"
+    local totemList = {}
+    for _, element in ipairs(GetElementOrder()) do
+        local activeKey = "active" .. element
+        local totemName = TotemDeckDB[activeKey]
+        if totemName then
+            table.insert(totemList, totemName)
+        end
+    end
+    local sequenceBody = "#showtooltip\n/castsequence reset=5 " .. table.concat(totemList, ", ")
+
+    local sequenceIndex = GetMacroIndexByName(sequenceName)
+    if sequenceIndex > 0 then
+        EditMacro(sequenceIndex, sequenceName, sequenceIcon, sequenceBody)
+    else
+        local numAccountMacros = GetNumMacros()
+        if numAccountMacros < 120 then
+            CreateMacro(sequenceName, sequenceIcon, sequenceBody, false)
+        end
+    end
 end
 
 -- Update a single macro when active totem changes
@@ -251,7 +274,22 @@ local function UpdateTotemMacro(element)
         macroIcon = totemData.icon:gsub("Interface\\Icons\\", "")
     end
 
-    EditMacro(macroIndex, macroName, macroIcon, "/cast " .. totemName)
+    EditMacro(macroIndex, macroName, macroIcon, "#showtooltip\n/cast " .. totemName)
+
+    -- Also update the sequence macro
+    local sequenceIndex = GetMacroIndexByName("TDAll")
+    if sequenceIndex > 0 then
+        local totemList = {}
+        for _, elem in ipairs(GetElementOrder()) do
+            local ak = "active" .. elem
+            local tn = TotemDeckDB[ak]
+            if tn then
+                table.insert(totemList, tn)
+            end
+        end
+        local sequenceBody = "#showtooltip\n/castsequence reset=5 " .. table.concat(totemList, ", ")
+        EditMacro(sequenceIndex, "TDAll", "INV_Misc_QuestionMark", sequenceBody)
+    end
 end
 
 -- Queue for pending updates after combat

@@ -19,7 +19,7 @@ A lightweight shaman totem management addon for WoW Classic TBC. Hover over any 
 - **Hide totems** - Hide specific totems you don't use from the popup
 - **Full configuration UI** - Tabbed config window with Layout and Totem Order settings
 - **Quick options menu** - Alt+click the bar for fast access to common settings
-- **Macro support** - Creates macros (TDEarth, TDFire, TDWater, TDAir) that cast your active totems
+- **Macro support** - Creates macros (TDEarth, TDFire, TDWater, TDAir, TDAll) that cast your active totems
 - **Moveable & lockable** - Ctrl+click to reposition, lock position via options
 
 ## Usage
@@ -81,7 +81,7 @@ Alt+click the bar to access:
 
 ## Macros
 
-The addon creates 4 macros you can place on your action bars:
+The addon creates 5 macros you can place on your action bars:
 
 | Macro | Description |
 |-------|-------------|
@@ -89,8 +89,9 @@ The addon creates 4 macros you can place on your action bars:
 | `TDFire` | Casts your active Fire totem |
 | `TDWater` | Casts your active Water totem |
 | `TDAir` | Casts your active Air totem |
+| `TDAll` | Sequence macro - drops all 4 active totems in order (press repeatedly) |
 
-These macros automatically update their icons when you change your active totem.
+All macros include `#showtooltip` for dynamic icon/tooltip display. They automatically update when you change your active totems. The `TDAll` sequence resets after 5 seconds of not pressing it.
 
 ## Installation
 
