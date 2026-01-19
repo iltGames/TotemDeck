@@ -1968,7 +1968,8 @@ CreateWeaponBuffButton = function(isVertical)
     local knownBuffs = GetKnownWeaponBuffs()
     if #knownBuffs == 0 then return end -- No weapon buffs known
 
-    local btn = CreateFrame("Button", "TotemDeckWeaponBuff", actionBarFrame)
+    -- Use SecureActionButtonTemplate so we can cast spells
+    local btn = CreateFrame("Button", "TotemDeckWeaponBuff", actionBarFrame, "SecureActionButtonTemplate")
     btn:SetSize(28, 28)
 
     if isVertical then
@@ -1977,6 +1978,16 @@ CreateWeaponBuffButton = function(isVertical)
         btn:SetPoint("LEFT", actionBarFrame, "RIGHT", 4, 0)
         btn:SetPoint("BOTTOM", actionBarFrame, "BOTTOM", 0, 2)
     end
+
+    -- Register for clicks
+    btn:RegisterForClicks("AnyDown", "AnyUp")
+
+    -- Set up default spell (first known buff, will be updated by UpdateWeaponBuffButton)
+    local defaultBuff = knownBuffs[1].name
+    btn:SetAttribute("type1", "spell")
+    btn:SetAttribute("spell1", defaultBuff)
+    btn:SetAttribute("type2", "macro")
+    btn:SetAttribute("macrotext2", "/use 17\n/cast " .. defaultBuff)
 
     -- Background
     btn.bg = btn:CreateTexture(nil, "BACKGROUND")
@@ -2001,7 +2012,7 @@ CreateWeaponBuffButton = function(isVertical)
     local defaultIcon = GetSpellTexture(knownBuffs[1].name) or knownBuffs[1].icon
     icon:SetTexture(defaultIcon)
     btn.icon = icon
-    btn.currentBuffIcon = nil -- Will be set by UpdateWeaponBuffButton
+    btn.currentBuffName = defaultBuff -- Track current buff for casting
 
     -- Timer text (shows remaining weapon buff duration) - overlay on button
     local timerText = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
@@ -2182,6 +2193,9 @@ CreateWeaponBuffButton = function(isVertical)
         else
             GameTooltip:AddLine("Off Hand: None", 0.5, 0.5, 0.5)
         end
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Left-click: Apply to main hand", 0.5, 0.5, 0.5)
+        GameTooltip:AddLine("Right-click: Apply to off-hand", 0.5, 0.5, 0.5)
         GameTooltip:Show()
     end)
 
@@ -2235,6 +2249,7 @@ UpdateWeaponBuffButton = function()
     if not weaponBuffButton then return end
 
     local enchantInfo = GetCurrentWeaponBuff()
+    local buffToUse = nil
 
     -- Update icon to show active buff
     if enchantInfo.mainHand and enchantInfo.mainHandBuff then
@@ -2244,6 +2259,7 @@ UpdateWeaponBuffButton = function()
         weaponBuffButton.icon:SetDesaturated(false)
         weaponBuffButton.icon:SetAlpha(1)
         weaponBuffButton.border:SetBackdropBorderColor(0.2, 0.8, 0.2, 1) -- Green when buffed
+        buffToUse = enchantInfo.mainHandBuff.name
     elseif enchantInfo.mainHand then
         -- Has enchant but we don't know which one (e.g., on login)
         -- Keep current icon but show green border
@@ -2251,15 +2267,26 @@ UpdateWeaponBuffButton = function()
         weaponBuffButton.icon:SetAlpha(1)
         weaponBuffButton.border:SetBackdropBorderColor(0.2, 0.8, 0.2, 1) -- Green when buffed
     else
-        -- No enchant - show first known buff icon, dimmed with red border
+        -- No enchant - show last used buff or first known, dimmed with red border
         local knownBuffs = GetKnownWeaponBuffs()
         if #knownBuffs > 0 then
-            local defaultIcon = GetSpellTexture(knownBuffs[1].name) or knownBuffs[1].icon
+            -- Use saved buff if available, otherwise first known
+            local savedBuff = TotemDeckDB and TotemDeckDB.lastMainHandBuff
+            local buffData = savedBuff and GetWeaponBuffByName(savedBuff) or knownBuffs[1]
+            local defaultIcon = GetSpellTexture(buffData.name) or buffData.icon
             weaponBuffButton.icon:SetTexture(defaultIcon)
+            buffToUse = buffData.name
         end
         weaponBuffButton.icon:SetDesaturated(true)
         weaponBuffButton.icon:SetAlpha(0.5)
         weaponBuffButton.border:SetBackdropBorderColor(0.8, 0.2, 0.2, 1) -- Red when no buff
+    end
+
+    -- Update spell attributes for clicking (only outside combat)
+    if buffToUse and buffToUse ~= weaponBuffButton.currentBuffName and not InCombatLockdown() then
+        weaponBuffButton:SetAttribute("spell1", buffToUse)
+        weaponBuffButton:SetAttribute("macrotext2", "/use 17\n/cast " .. buffToUse)
+        weaponBuffButton.currentBuffName = buffToUse
     end
 
     -- Update timer text
