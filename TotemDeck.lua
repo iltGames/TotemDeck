@@ -1494,174 +1494,6 @@ local function ToggleConfigWindow()
     end
 end
 
--- Options menu
-local optionsMenu = CreateFrame("Frame", "TotemDeckOptionsMenu", UIParent, "UIDropDownMenuTemplate")
-
-local function InitializeOptionsMenu(self, level, menuList)
-    level = level or 1
-    local info = UIDropDownMenu_CreateInfo()
-
-    if level == 1 then
-        -- Title
-        info.text = "TotemDeck Options"
-        info.isTitle = true
-        info.notCheckable = true
-        UIDropDownMenu_AddButton(info, level)
-
-        -- Popup Direction submenu
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Popup Direction"
-        info.notCheckable = true
-        info.hasArrow = true
-        info.menuList = "POPUP_DIR"
-        UIDropDownMenu_AddButton(info, level)
-
-        -- Timer Position submenu
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Timer Position"
-        info.notCheckable = true
-        info.hasArrow = true
-        info.menuList = "TIMER_POS"
-        UIDropDownMenu_AddButton(info, level)
-
-        -- Timer Style submenu
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Timer Style"
-        info.notCheckable = true
-        info.hasArrow = true
-        info.menuList = "TIMER_STYLE"
-        UIDropDownMenu_AddButton(info, level)
-
-        -- Spacer
-        info = UIDropDownMenu_CreateInfo()
-        info.text = ""
-        info.isTitle = true
-        info.notCheckable = true
-        UIDropDownMenu_AddButton(info, level)
-
-        -- Show Timers toggle
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Show Timers"
-        info.checked = TotemDeckDB.showTimers
-        info.func = function()
-            TotemDeckDB.showTimers = not TotemDeckDB.showTimers
-            if not TotemDeckDB.showTimers and timerFrame then
-                timerFrame:Hide()
-            elseif TotemDeckDB.showTimers then
-                UpdateTimers()
-            end
-        end
-        UIDropDownMenu_AddButton(info, level)
-
-        -- Lock Position toggle
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Lock Position"
-        info.checked = TotemDeckDB.locked
-        info.func = function() TotemDeckDB.locked = not TotemDeckDB.locked end
-        UIDropDownMenu_AddButton(info, level)
-
-        -- Always Show Popup toggle
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Always Show Popup"
-        info.checked = TotemDeckDB.alwaysShowPopup
-        info.func = function()
-            TotemDeckDB.alwaysShowPopup = not TotemDeckDB.alwaysShowPopup
-            if TotemDeckDB.alwaysShowPopup then
-                ShowPopup(GetElementOrder()[1])
-            else
-                popupVisible = false
-                for _, container in pairs(popupContainers) do
-                    if not InCombatLockdown() then
-                        container:Hide()
-                    else
-                        container:SetAlpha(0)
-                        container:SetFrameStrata("BACKGROUND")
-                    end
-                end
-            end
-        end
-        UIDropDownMenu_AddButton(info, level)
-
-        -- Spacer
-        info = UIDropDownMenu_CreateInfo()
-        info.text = ""
-        info.isTitle = true
-        info.notCheckable = true
-        UIDropDownMenu_AddButton(info, level)
-
-        -- Show Full Config
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Show Full Config..."
-        info.notCheckable = true
-        info.func = function()
-            CloseDropDownMenus()
-            ToggleConfigWindow()
-        end
-        UIDropDownMenu_AddButton(info, level)
-
-        -- Recreate Macros
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Recreate Macros"
-        info.notCheckable = true
-        info.func = function() CreateTotemMacros(); print("|cFF00FF00TotemDeck:|r Macros recreated") end
-        UIDropDownMenu_AddButton(info, level)
-
-        -- Close
-        info = UIDropDownMenu_CreateInfo()
-        info.text = "Close"
-        info.notCheckable = true
-        info.func = function() CloseDropDownMenus() end
-        UIDropDownMenu_AddButton(info, level)
-
-    elseif level == 2 then
-        if menuList == "POPUP_DIR" then
-            local directions = { { "Up", "UP" }, { "Down", "DOWN" }, { "Left", "LEFT" }, { "Right", "RIGHT" } }
-            for _, dir in ipairs(directions) do
-                info = UIDropDownMenu_CreateInfo()
-                info.text = dir[1]
-                info.checked = (TotemDeckDB.popupDirection == dir[2])
-                info.func = function()
-                    TotemDeckDB.popupDirection = dir[2]
-                    CloseDropDownMenus()
-                    RebuildPopupColumns()
-                end
-                UIDropDownMenu_AddButton(info, level)
-            end
-        elseif menuList == "TIMER_POS" then
-            local positions = { { "Above", "ABOVE" }, { "Below", "BELOW" }, { "Left", "LEFT" }, { "Right", "RIGHT" } }
-            for _, pos in ipairs(positions) do
-                info = UIDropDownMenu_CreateInfo()
-                info.text = pos[1]
-                info.checked = (TotemDeckDB.timerPosition == pos[2])
-                info.func = function()
-                    TotemDeckDB.timerPosition = pos[2]
-                    CloseDropDownMenus()
-                    RebuildTimerFrame()
-                end
-                UIDropDownMenu_AddButton(info, level)
-            end
-        elseif menuList == "TIMER_STYLE" then
-            local styles = { { "Bars", "bars" }, { "Icons", "icons" } }
-            for _, style in ipairs(styles) do
-                info = UIDropDownMenu_CreateInfo()
-                info.text = style[1]
-                info.checked = ((TotemDeckDB.timerStyle or "bars") == style[2])
-                info.func = function()
-                    TotemDeckDB.timerStyle = style[2]
-                    CloseDropDownMenus()
-                    UpdateTimers()
-                end
-                UIDropDownMenu_AddButton(info, level)
-            end
-        end
-    end
-end
-
-local function OpenOptionsMenu(anchorFrame)
-    UIDropDownMenu_Initialize(optionsMenu, InitializeOptionsMenu, "MENU")
-    ToggleDropDownMenu(1, nil, optionsMenu, "cursor", 0, 0)
-end
-
 -- Create the action bar with active totem buttons
 local function CreateActionBarFrame()
     local direction = TotemDeckDB.popupDirection or "UP"
@@ -1684,13 +1516,11 @@ local function CreateActionBarFrame()
     actionBarFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
     actionBarFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
 
-    -- Make movable with Ctrl+Click, options menu with Alt+Click
+    -- Make movable with Ctrl+Click
     actionBarFrame:SetMovable(true)
     actionBarFrame:EnableMouse(true)
     actionBarFrame:SetScript("OnMouseDown", function(self, button)
-        if button == "LeftButton" and IsAltKeyDown() then
-            OpenOptionsMenu(self)
-        elseif button == "LeftButton" and IsControlKeyDown() and not TotemDeckDB.locked then
+        if button == "LeftButton" and IsControlKeyDown() and not TotemDeckDB.locked then
             self:StartMoving()
         end
     end)
@@ -1750,9 +1580,13 @@ local function CreateActionBarFrame()
             btn.totemName = totemName
         end
 
-        -- Right-click to dismiss totem
+        -- Shift+right-click to cast Totemic Call (recall all totems)
+        btn:SetAttribute("shift-type2", "spell")
+        btn:SetAttribute("shift-spell2", "Totemic Call")
+
+        -- Right-click to dismiss totem (but not when shift is held)
         btn:HookScript("PostClick", function(self, button)
-            if button == "RightButton" then
+            if button == "RightButton" and not IsShiftKeyDown() then
                 local slot = TOTEM_SLOTS[self.element]
                 if slot then
                     DestroyTotem(slot)
@@ -1760,11 +1594,9 @@ local function CreateActionBarFrame()
             end
         end)
 
-        -- Ctrl+click to move the frame, Alt+click for options
+        -- Ctrl+click to move the frame
         btn:HookScript("OnMouseDown", function(self, button)
-            if button == "LeftButton" and IsAltKeyDown() then
-                OpenOptionsMenu(self)
-            elseif button == "LeftButton" and IsControlKeyDown() and not TotemDeckDB.locked then
+            if button == "LeftButton" and IsControlKeyDown() and not TotemDeckDB.locked then
                 actionBarFrame:StartMoving()
             end
         end)
@@ -1803,6 +1635,7 @@ local function CreateActionBarFrame()
             GameTooltip:AddLine(" ")
             GameTooltip:AddLine("Left-click to cast", 0.5, 0.5, 0.5)
             GameTooltip:AddLine("Right-click to dismiss", 0.5, 0.5, 0.5)
+            GameTooltip:AddLine("Shift+Right-click for Totemic Call", 0.5, 0.5, 0.5)
             GameTooltip:Show()
         end)
 
@@ -2334,14 +2167,6 @@ local function CreateTimerFrame()
     })
     timerFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
     timerFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
-
-    -- Alt+Click for options menu
-    timerFrame:EnableMouse(true)
-    timerFrame:SetScript("OnMouseDown", function(self, button)
-        if button == "LeftButton" and IsAltKeyDown() then
-            OpenOptionsMenu(self)
-        end
-    end)
 
     -- Create timer bars for each element
     for i, element in ipairs(GetElementOrder()) do

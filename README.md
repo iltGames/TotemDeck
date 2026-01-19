@@ -8,6 +8,7 @@ A lightweight shaman totem management addon for WoW Classic. Streamlined totem b
 - **4-button bar** for Earth, Fire, Water, Air totems
 - **Hover popup** shows all trained totems for each element
 - **Left-click** to cast, **Right-click** to set as active or dismiss
+- **Shift+Right-click** to recall all totems (Totemic Call)
 - **Custom ordering** for both elements and individual totems
 - **Hide unused totems** from the popup
 
@@ -26,7 +27,7 @@ A lightweight shaman totem management addon for WoW Classic. Streamlined totem b
 - Hover popup with all known weapon buffs
 - **Left-click** applies to main hand, **Right-click** applies to off-hand
 - **Green border** when buffed, **Red border** when no enchant active
-- Icon updates to show currently active buff
+- Icon updates to show currently active buff with remaining duration
 
 ### Macros
 Creates 5 macros for your action bars:
@@ -45,12 +46,12 @@ Creates 5 macros for your action bars:
 |--------|----------|--------------|
 | **Left-click** | Cast active totem | Cast totem |
 | **Right-click** | Dismiss totem | Set as active |
-| **Alt+click** | Options menu | - |
+| **Shift+Right-click** | Totemic Call | - |
 | **Ctrl+drag** | Move bar | - |
 
 ## Configuration
 
-**Open config:** `/td config` or Alt+click the bar
+**Open config:** `/td config`
 
 | Setting | Options |
 |---------|---------|

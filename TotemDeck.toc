@@ -3,7 +3,7 @@
 ## Title: TotemDeck
 ## Notes: Shaman totem management - hover to pick your totems like cards from a deck
 ## Author: Player
-## Version: 1.1.8
+## Version: 1.0.0
 ## SavedVariables: TotemDeckDB
 
 TotemDeck.lua
