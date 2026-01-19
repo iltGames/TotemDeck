@@ -251,20 +251,50 @@ local function OnWeaponBuffCast(spellName)
             -- Main hand has enchant - assume this cast went to main hand
             -- (most common case - weapon buffs default to main hand)
             activeMainHandBuff = buff
+            -- Save to DB for persistence across reloads
+            if TotemDeckDB then
+                TotemDeckDB.lastMainHandBuff = buff.name
+            end
         end
 
         -- If only off hand has enchant and main doesn't, it went to off hand
         if hasOffHandEnchant and not hasMainHandEnchant then
             activeOffHandBuff = buff
+            if TotemDeckDB then
+                TotemDeckDB.lastOffHandBuff = buff.name
+            end
         end
 
         -- If both have enchants and off hand is the "new" one (main was already enchanted)
         if hasOffHandEnchant and hasMainHandEnchant and preMain and not preOff then
             activeOffHandBuff = buff
+            if TotemDeckDB then
+                TotemDeckDB.lastOffHandBuff = buff.name
+            end
         end
 
         UpdateWeaponBuffButton()
     end)
+end
+
+-- Restore saved weapon buff info on login (if enchant is still active)
+local function RestoreSavedWeaponBuffs()
+    local hasMainHandEnchant, _, _, _,
+          hasOffHandEnchant = GetWeaponEnchantInfo()
+
+    if hasMainHandEnchant and TotemDeckDB and TotemDeckDB.lastMainHandBuff then
+        local buff = GetWeaponBuffByName(TotemDeckDB.lastMainHandBuff)
+        if buff then
+            activeMainHandBuff = buff
+        end
+    end
+
+    if hasOffHandEnchant and TotemDeckDB and TotemDeckDB.lastOffHandBuff then
+        local buff = GetWeaponBuffByName(TotemDeckDB.lastOffHandBuff)
+        if buff then
+            activeOffHandBuff = buff
+        end
+    end
 end
 
 -- Pre-cast hook to track enchant state before casting
@@ -1973,6 +2003,14 @@ CreateWeaponBuffButton = function(isVertical)
     btn.icon = icon
     btn.currentBuffIcon = nil -- Will be set by UpdateWeaponBuffButton
 
+    -- Timer text (shows remaining weapon buff duration) - overlay on button
+    local timerText = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+    timerText:SetPoint("BOTTOM", btn, "BOTTOM", 0, 1)
+    timerText:SetTextColor(1, 1, 1)
+    timerText:SetShadowOffset(1, -1)
+    timerText:SetShadowColor(0, 0, 0, 1)
+    btn.timerText = timerText
+
     -- Create popup for weapon buffs
     local direction = TotemDeckDB.popupDirection or "UP"
     local popupIsHorizontal = (direction == "LEFT" or direction == "RIGHT")
@@ -2223,6 +2261,23 @@ UpdateWeaponBuffButton = function()
         weaponBuffButton.icon:SetAlpha(0.5)
         weaponBuffButton.border:SetBackdropBorderColor(0.8, 0.2, 0.2, 1) -- Red when no buff
     end
+
+    -- Update timer text
+    if weaponBuffButton.timerText then
+        if enchantInfo.mainHandTime then
+            -- mainHandTime is in milliseconds
+            local seconds = math.floor(enchantInfo.mainHandTime / 1000)
+            if seconds >= 60 then
+                weaponBuffButton.timerText:SetText(string.format("%d:%02d", math.floor(seconds / 60), seconds % 60))
+            else
+                weaponBuffButton.timerText:SetText(string.format("%d", seconds))
+            end
+            weaponBuffButton.timerText:Show()
+        else
+            weaponBuffButton.timerText:SetText("")
+            weaponBuffButton.timerText:Hide()
+        end
+    end
 end
 
 -- Create timer frame (position based on timerPosition setting)
@@ -2465,6 +2520,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
             return
         end
 
+        -- Restore saved weapon buff info before creating UI
+        RestoreSavedWeaponBuffs()
+
         CreateActionBarFrame()
         CreateTimerFrame()
         SetupPopupSystem()
@@ -2536,15 +2594,20 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
     end
 end)
 
--- Timer update (runs every 0.1 seconds when timers are shown)
+-- Timer update (runs every 0.1 seconds)
 local timerUpdateFrame = CreateFrame("Frame")
 local elapsed = 0
 timerUpdateFrame:SetScript("OnUpdate", function(self, delta)
     elapsed = elapsed + delta
     if elapsed >= 0.1 then
         elapsed = 0
+        -- Update totem timers
         if timerFrame and timerFrame:IsShown() then
             UpdateTimers()
+        end
+        -- Update weapon buff timer
+        if weaponBuffButton then
+            UpdateWeaponBuffButton()
         end
     end
 end)
