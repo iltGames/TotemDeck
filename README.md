@@ -1,103 +1,83 @@
 # TotemDeck
 
-A lightweight shaman totem management addon for WoW Classic TBC. Hover over any element to see all available totems, then cast or set your active totem with a single click.
+A lightweight shaman totem management addon for WoW Classic. Streamlined totem bar with hover popups, weapon buff management, and Reincarnation tracking.
 
 ## Features
 
-- **Compact totem bar** - 4 buttons, one for each element (Earth, Fire, Water, Air)
-- **Hover popup** - Mouse over any element to see all totems of that type
-- **Always show option** - Optionally keep popup bars visible at all times
-- **Smart filtering** - Only shows totems you have trained
-- **Quick casting** - Left-click any totem to cast it instantly
-- **Quick dismiss** - Right-click the main element button to dismiss that totem
-- **Active totem selection** - Right-click a popup totem to set it as your preferred totem for that element (works in combat)
-- **Placed totem indicator** - When a placed totem differs from your active selection, shows the placed totem with a desaturated icon and gray border
-- **Totem timers** - Duration display with two styles: traditional bars or compact icon text
-- **Timer styles** - Choose between bar timers (separate timer bars) or icon timers (countdown text under each button)
-- **Custom element order** - Rearrange element groups (Earth, Fire, Water, Air) in any order
-- **Custom totem order** - Rearrange totems within each element via the config window
-- **Hide totems** - Hide specific totems you don't use from the popup
-- **Full configuration UI** - Tabbed config window with Layout and Totem Order settings
-- **Quick options menu** - Alt+click the bar for fast access to common settings
-- **Macro support** - Creates macros (TDEarth, TDFire, TDWater, TDAir, TDAll) that cast your active totems
-- **Moveable & lockable** - Ctrl+click to reposition, lock position via options
+### Totem Bar
+- **4-button bar** for Earth, Fire, Water, Air totems
+- **Hover popup** shows all trained totems for each element
+- **Left-click** to cast, **Right-click** to set as active or dismiss
+- **Custom ordering** for both elements and individual totems
+- **Hide unused totems** from the popup
 
-## Usage
+### Timers
+- **Bar style** - Traditional timer bars above/below/beside the bar
+- **Icon style** - Compact countdown text under each button
+- **Placed totem indicator** - Shows when placed totem differs from active selection
 
-### Main Bar
-- **Hover** over an element to see all totems for that type
-- **Left-click** to cast your active totem
-- **Right-click** to dismiss the active totem of that element
-- **Alt+click** to open the quick options menu
-- **Ctrl+click** to move the bar (when unlocked)
+### Reincarnation Tracker
+- Small button showing Reincarnation with Ankh count overlay
+- Cooldown sweep display
+- **Green border** when ready, **Red border** when no Ankhs
 
-### Popup Totems
-- **Left-click** a totem to cast it
-- **Right-click** a totem to set it as active for that element
+### Weapon Buffs
+- Quick access to all weapon enchants (Rockbiter, Flametongue, Frostbrand, Windfury)
+- Hover popup with all known weapon buffs
+- **Left-click** applies to main hand, **Right-click** applies to off-hand
+- **Green border** when buffed, **Red border** when no enchant active
+- Icon updates to show currently active buff
+
+### Macros
+Creates 5 macros for your action bars:
+
+| Macro | Description |
+|-------|-------------|
+| `TDEarth` | Cast active Earth totem |
+| `TDFire` | Cast active Fire totem |
+| `TDWater` | Cast active Water totem |
+| `TDAir` | Cast active Air totem |
+| `TDAll` | Cast all 4 totems in sequence |
+
+## Controls
+
+| Action | Main Bar | Popup Totems |
+|--------|----------|--------------|
+| **Left-click** | Cast active totem | Cast totem |
+| **Right-click** | Dismiss totem | Set as active |
+| **Alt+click** | Options menu | - |
+| **Ctrl+drag** | Move bar | - |
 
 ## Configuration
 
-### Full Config Window
-Open with `/td config` or via "Show Full Config..." in the quick menu.
+**Open config:** `/td config` or Alt+click the bar
 
-**Layout Tab:**
-- Popup Direction (Up/Down/Left/Right)
-- Timer Position (Above/Below/Left/Right)
-- Timer Style (Bars/Icons)
-- Show Timers toggle
-- Lock Bar Position toggle
-- Always Show Popup toggle
-- Recreate Macros button
+| Setting | Options |
+|---------|---------|
+| Popup Direction | Up / Down / Left / Right |
+| Timer Position | Above / Below / Left / Right |
+| Timer Style | Bars / Icons |
+| Show Timers | On / Off |
+| Lock Position | On / Off |
+| Always Show Popup | On / Off |
+| Show Reincarnation | On / Off |
+| Show Weapon Buffs | On / Off |
 
-**Totem Order Tab:**
-- Element Order - Rearrange the element groups using arrow buttons
-- Totem Order - Reorder totems within each element using up/down buttons
-- Hide Totems - Click the X button on any totem to hide it from the popup (O to show again)
-- Click "Apply" to update the display
-- Click "Reset to Default" to restore original order and show all hidden totems
-
-### Quick Options Menu
-Alt+click the bar to access:
-- Popup direction
-- Timer position
-- Timer style
-- Show/hide timers
-- Lock/unlock position
-- Always show popup
-- Show full config
-- Recreate macros
-
-## Slash Commands
+## Commands
 
 | Command | Description |
 |---------|-------------|
 | `/td` | Show help |
-| `/td show` | Toggle bar visibility |
-| `/td timers` | Toggle timer bars |
-| `/td config` | Open configuration window |
-| `/td timers above/below/left/right` | Set timer position |
-| `/td popup up/down/left/right` | Set popup direction |
-| `/td macros` | Create/update macros |
-
-## Macros
-
-The addon creates 5 macros you can place on your action bars:
-
-| Macro | Description |
-|-------|-------------|
-| `TDEarth` | Casts your active Earth totem |
-| `TDFire` | Casts your active Fire totem |
-| `TDWater` | Casts your active Water totem |
-| `TDAir` | Casts your active Air totem |
-| `TDAll` | Sequence macro - drops all 4 active totems in order (press repeatedly) |
-
-All macros include `#showtooltip` for dynamic icon/tooltip display. They automatically update when you change your active totems. The `TDAll` sequence resets after 5 seconds of not pressing it.
+| `/td config` | Open config window |
+| `/td show` | Toggle visibility |
+| `/td timers` | Toggle timers |
+| `/td macros` | Recreate macros |
 
 ## Installation
 
-1. Download and extract to your `Interface/AddOns` folder
+1. Extract to `Interface/AddOns/TotemDeck`
 2. Restart WoW or `/reload`
-3. The totem bar appears automatically for Shaman characters
+3. Bar appears automatically for Shaman characters
 
 ## License
 

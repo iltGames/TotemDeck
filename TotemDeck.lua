@@ -29,6 +29,8 @@ local defaults = {
         Water = {},
         Air = {},
     },
+    showReincarnation = true, -- Show Reincarnation tracker button
+    showWeaponBuffs = true, -- Show Weapon Buffs button
 }
 
 -- Totem data: name, duration in seconds, icon
@@ -89,6 +91,17 @@ local TOTEM_SLOTS = {
     Air = 4,
 }
 
+-- Weapon buff data
+local WEAPON_BUFFS = {
+    { name = "Rockbiter Weapon", icon = "Interface\\Icons\\Spell_Nature_RockBiter" },
+    { name = "Flametongue Weapon", icon = "Interface\\Icons\\Spell_Fire_FlameToungue" },
+    { name = "Frostbrand Weapon", icon = "Interface\\Icons\\Spell_Frost_FrostBrand" },
+    { name = "Windfury Weapon", icon = "Interface\\Icons\\Spell_Nature_Cyclone" },
+}
+
+-- Ankh item ID for Reincarnation
+local ANKH_ITEM_ID = 17030
+
 -- UI elements
 local timerFrame, actionBarFrame
 local timerBars = {}
@@ -98,9 +111,17 @@ local popupContainers = {} -- Container frames for each element, anchored to mai
 local buttonCounter = 0
 local popupVisible = false
 local popupHideDelay = 0
+local reincarnationButton = nil -- Reincarnation tracker button
+local weaponBuffButton = nil -- Weapon buff button
+local weaponBuffPopup = nil -- Weapon buff popup container
+local weaponBuffPopupButtons = {} -- Buttons inside the weapon buff popup
+local weaponBuffPopupVisible = false
+local activeMainHandBuff = nil -- Track which weapon buff is on main hand
+local activeOffHandBuff = nil -- Track which weapon buff is on off hand
 
 -- Forward declarations
 local RebuildPopupColumns, RebuildTimerFrame, CreateTotemMacros, ShowPopup
+local UpdateReincarnationButton, UpdateWeaponBuffButton, CreateReincarnationButton, CreateWeaponBuffButton
 
 -- Utility: Check if player is a Shaman
 local function IsShaman()
@@ -148,6 +169,110 @@ local function IsTotemHidden(element, totemName)
         end
     end
     return false
+end
+
+-- Check if a weapon buff spell is known
+local function IsWeaponBuffKnown(buffName)
+    local name, _, _, _, _, _, spellID = GetSpellInfo(buffName)
+    if not spellID then
+        return false
+    end
+    return IsPlayerSpell(spellID)
+end
+
+-- Get list of known weapon buffs
+local function GetKnownWeaponBuffs()
+    local known = {}
+    for _, buff in ipairs(WEAPON_BUFFS) do
+        if IsWeaponBuffKnown(buff.name) then
+            table.insert(known, buff)
+        end
+    end
+    return known
+end
+
+-- Get current weapon enchant info and match to weapon buff name
+local function GetCurrentWeaponBuff()
+    local hasMainHandEnchant, mainHandExpiration, mainHandCharges, mainHandEnchantID,
+          hasOffHandEnchant, offHandExpiration, offHandCharges, offHandEnchantID = GetWeaponEnchantInfo()
+
+    -- Clear tracked buffs if enchant is gone
+    if not hasMainHandEnchant then
+        activeMainHandBuff = nil
+    end
+    if not hasOffHandEnchant then
+        activeOffHandBuff = nil
+    end
+
+    -- Return info about current enchants
+    return {
+        mainHand = hasMainHandEnchant and mainHandEnchantID or nil,
+        mainHandTime = hasMainHandEnchant and mainHandExpiration or nil,
+        mainHandBuff = activeMainHandBuff,
+        offHand = hasOffHandEnchant and offHandEnchantID or nil,
+        offHandTime = hasOffHandEnchant and offHandExpiration or nil,
+        offHandBuff = activeOffHandBuff,
+    }
+end
+
+-- Check if a spell name is a weapon buff and return the buff data
+local function GetWeaponBuffByName(spellName)
+    for _, buff in ipairs(WEAPON_BUFFS) do
+        if spellName == buff.name then
+            return buff
+        end
+    end
+    return nil
+end
+
+-- Track enchant state before cast to detect which slot changed
+local preCastMainHandEnchant = false
+local preCastOffHandEnchant = false
+
+-- Called when a weapon buff is successfully cast
+local function OnWeaponBuffCast(spellName)
+    local buff = GetWeaponBuffByName(spellName)
+    if not buff then return end
+
+    -- Capture pre-cast state
+    local preMain = preCastMainHandEnchant
+    local preOff = preCastOffHandEnchant
+
+    -- Check which weapon got the buff by comparing enchant state
+    -- We need a slight delay because GetWeaponEnchantInfo may not update immediately
+    C_Timer.After(0.1, function()
+        local hasMainHandEnchant, mainExp, _, _,
+              hasOffHandEnchant, offExp = GetWeaponEnchantInfo()
+
+        -- Detect which slot changed or was refreshed
+        -- If main hand now has enchant (and didn't before, or has fresh duration), it's main hand
+        -- If off hand now has enchant (and didn't before, or has fresh duration), it's off hand
+        if hasMainHandEnchant then
+            -- Main hand has enchant - assume this cast went to main hand
+            -- (most common case - weapon buffs default to main hand)
+            activeMainHandBuff = buff
+        end
+
+        -- If only off hand has enchant and main doesn't, it went to off hand
+        if hasOffHandEnchant and not hasMainHandEnchant then
+            activeOffHandBuff = buff
+        end
+
+        -- If both have enchants and off hand is the "new" one (main was already enchanted)
+        if hasOffHandEnchant and hasMainHandEnchant and preMain and not preOff then
+            activeOffHandBuff = buff
+        end
+
+        UpdateWeaponBuffButton()
+    end)
+end
+
+-- Pre-cast hook to track enchant state before casting
+local function TrackPreCastEnchantState()
+    local hasMainHandEnchant, _, _, _,
+          hasOffHandEnchant = GetWeaponEnchantInfo()
+    preCastMainHandEnchant = hasMainHandEnchant
+    preCastOffHandEnchant = hasOffHandEnchant
 end
 
 -- Get totems for an element in custom order (if set)
@@ -1032,7 +1157,7 @@ local function CreateConfigWindow()
     end)
 
     -- Options
-    local optionsSection = CreateLayoutSection(layoutContent, "Options", -220, 115)
+    local optionsSection = CreateLayoutSection(layoutContent, "Options", -220, 167)
 
     local showTimersCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
     showTimersCheck:SetPoint("TOPLEFT", 10, -28)
@@ -1086,6 +1211,40 @@ local function CreateConfigWindow()
     alwaysShowLabel:SetPoint("LEFT", alwaysShowCheck, "RIGHT", 4, 0)
     alwaysShowLabel:SetText("Always Show Popup")
     frame.alwaysShowCheck = alwaysShowCheck
+
+    -- Show Reincarnation Tracker checkbox
+    local showReincCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
+    showReincCheck:SetPoint("TOPLEFT", 10, -104)
+    showReincCheck:SetChecked(TotemDeckDB.showReincarnation)
+    showReincCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.showReincarnation = self:GetChecked()
+        if not InCombatLockdown() then
+            RebuildPopupColumns()
+        else
+            print("|cFF00FF00TotemDeck:|r Change will apply after combat")
+        end
+    end)
+    local showReincLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    showReincLabel:SetPoint("LEFT", showReincCheck, "RIGHT", 4, 0)
+    showReincLabel:SetText("Show Reincarnation Tracker")
+    frame.showReincCheck = showReincCheck
+
+    -- Show Weapon Buffs checkbox
+    local showWeaponCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
+    showWeaponCheck:SetPoint("TOPLEFT", 10, -130)
+    showWeaponCheck:SetChecked(TotemDeckDB.showWeaponBuffs)
+    showWeaponCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.showWeaponBuffs = self:GetChecked()
+        if not InCombatLockdown() then
+            RebuildPopupColumns()
+        else
+            print("|cFF00FF00TotemDeck:|r Change will apply after combat")
+        end
+    end)
+    local showWeaponLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    showWeaponLabel:SetPoint("LEFT", showWeaponCheck, "RIGHT", 4, 0)
+    showWeaponLabel:SetText("Show Weapon Buffs")
+    frame.showWeaponCheck = showWeaponCheck
 
     local macrosBtn = CreateFrame("Button", nil, optionsSection, "UIPanelButtonTemplate")
     macrosBtn:SetSize(120, 22)
@@ -1279,6 +1438,15 @@ local function RefreshConfigWindowState()
     end
     if configWindow.lockPosCheck then
         configWindow.lockPosCheck:SetChecked(TotemDeckDB.locked)
+    end
+    if configWindow.alwaysShowCheck then
+        configWindow.alwaysShowCheck:SetChecked(TotemDeckDB.alwaysShowPopup)
+    end
+    if configWindow.showReincCheck then
+        configWindow.showReincCheck:SetChecked(TotemDeckDB.showReincarnation)
+    end
+    if configWindow.showWeaponCheck then
+        configWindow.showWeaponCheck:SetChecked(TotemDeckDB.showWeaponBuffs)
     end
 end
 
@@ -1639,7 +1807,422 @@ local function CreateActionBarFrame()
         CreatePopupColumn(element, btn)
     end
 
+    -- Create Reincarnation tracker button (left/top side)
+    CreateReincarnationButton(isVertical)
+
+    -- Create Weapon Buff button (right/bottom side)
+    CreateWeaponBuffButton(isVertical)
+
     actionBarFrame:Show()
+end
+
+-- Create Reincarnation tracker button
+CreateReincarnationButton = function(isVertical)
+    if not TotemDeckDB.showReincarnation then return end
+
+    local btn = CreateFrame("Button", "TotemDeckReincarnation", actionBarFrame)
+    btn:SetSize(28, 28)
+
+    if isVertical then
+        btn:SetPoint("BOTTOM", actionBarFrame, "TOP", 0, 4)
+    else
+        btn:SetPoint("RIGHT", actionBarFrame, "LEFT", -4, 0)
+        btn:SetPoint("BOTTOM", actionBarFrame, "BOTTOM", 0, 2)
+    end
+
+    -- Background
+    btn.bg = btn:CreateTexture(nil, "BACKGROUND")
+    btn.bg:SetAllPoints()
+    btn.bg:SetColorTexture(0.1, 0.1, 0.1, 0.9)
+
+    -- Border
+    btn.border = CreateFrame("Frame", nil, btn, "BackdropTemplate")
+    btn.border:SetPoint("TOPLEFT", -1, 1)
+    btn.border:SetPoint("BOTTOMRIGHT", 1, -1)
+    btn.border:SetBackdrop({
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    btn.border:SetBackdropBorderColor(0.5, 0.3, 0.6, 1) -- Purple for Reincarnation
+    btn.border:EnableMouse(false)
+
+    -- Icon (Reincarnation spell)
+    local icon = btn:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(24, 24)
+    icon:SetPoint("CENTER")
+    local reincIcon = GetSpellTexture("Reincarnation")
+    icon:SetTexture(reincIcon or "Interface\\Icons\\Spell_Nature_Reincarnation")
+    btn.icon = icon
+
+    -- Ankh count text (bottom-right corner)
+    local countText = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+    countText:SetPoint("BOTTOMRIGHT", -1, 1)
+    countText:SetTextColor(1, 1, 1)
+    btn.countText = countText
+
+    -- Cooldown frame
+    local cooldown = CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
+    cooldown:SetAllPoints(icon)
+    cooldown:SetDrawSwipe(true)
+    cooldown:SetDrawEdge(false)
+    btn.cooldown = cooldown
+
+    -- Tooltip
+    btn:SetScript("OnEnter", function(self)
+        self.border:SetBackdropBorderColor(1, 1, 1, 1)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        local _, _, _, _, _, _, spellID = GetSpellInfo("Reincarnation")
+        if spellID then
+            GameTooltip:SetSpellByID(spellID)
+        else
+            GameTooltip:SetText("Reincarnation", 1, 1, 1)
+        end
+        local ankhCount = GetItemCount(ANKH_ITEM_ID)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Ankhs: " .. ankhCount, 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+
+    btn:SetScript("OnLeave", function(self)
+        -- Restore border color based on Ankh count
+        local ankhCount = GetItemCount(ANKH_ITEM_ID)
+        if ankhCount == 0 then
+            self.border:SetBackdropBorderColor(0.8, 0.2, 0.2, 1) -- Red when no Ankhs
+        else
+            self.border:SetBackdropBorderColor(0.5, 0.3, 0.6, 1) -- Purple normally
+        end
+        GameTooltip:Hide()
+    end)
+
+    reincarnationButton = btn
+    UpdateReincarnationButton()
+end
+
+-- Update Reincarnation button state (Ankh count, cooldown)
+UpdateReincarnationButton = function()
+    if not reincarnationButton then return end
+
+    local ankhCount = GetItemCount(ANKH_ITEM_ID)
+    reincarnationButton.countText:SetText(ankhCount > 0 and ankhCount or "")
+
+    -- Update cooldown
+    local start, duration, enabled = GetSpellCooldown("Reincarnation")
+    if start and duration and duration > 1.5 then
+        reincarnationButton.cooldown:SetCooldown(start, duration)
+    else
+        reincarnationButton.cooldown:Clear()
+    end
+
+    -- Dim if no Ankhs or on cooldown
+    local onCooldown = start and duration and duration > 1.5
+    if ankhCount == 0 or onCooldown then
+        reincarnationButton.icon:SetDesaturated(true)
+        reincarnationButton.icon:SetAlpha(0.5)
+    else
+        reincarnationButton.icon:SetDesaturated(false)
+        reincarnationButton.icon:SetAlpha(1)
+    end
+
+    -- Update border color based on Ankh count
+    if ankhCount == 0 then
+        reincarnationButton.border:SetBackdropBorderColor(0.8, 0.2, 0.2, 1) -- Red when no Ankhs
+    else
+        reincarnationButton.border:SetBackdropBorderColor(0.5, 0.3, 0.6, 1) -- Purple normally
+    end
+end
+
+-- Create Weapon Buff button and popup
+CreateWeaponBuffButton = function(isVertical)
+    if not TotemDeckDB.showWeaponBuffs then return end
+
+    local knownBuffs = GetKnownWeaponBuffs()
+    if #knownBuffs == 0 then return end -- No weapon buffs known
+
+    local btn = CreateFrame("Button", "TotemDeckWeaponBuff", actionBarFrame)
+    btn:SetSize(28, 28)
+
+    if isVertical then
+        btn:SetPoint("TOP", actionBarFrame, "BOTTOM", 0, -4)
+    else
+        btn:SetPoint("LEFT", actionBarFrame, "RIGHT", 4, 0)
+        btn:SetPoint("BOTTOM", actionBarFrame, "BOTTOM", 0, 2)
+    end
+
+    -- Background
+    btn.bg = btn:CreateTexture(nil, "BACKGROUND")
+    btn.bg:SetAllPoints()
+    btn.bg:SetColorTexture(0.1, 0.1, 0.1, 0.9)
+
+    -- Border
+    btn.border = CreateFrame("Frame", nil, btn, "BackdropTemplate")
+    btn.border:SetPoint("TOPLEFT", -1, 1)
+    btn.border:SetPoint("BOTTOMRIGHT", 1, -1)
+    btn.border:SetBackdrop({
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    btn.border:SetBackdropBorderColor(0.4, 0.6, 0.8, 1) -- Blue-ish for weapons
+    btn.border:EnableMouse(false)
+
+    -- Icon (show first known weapon buff icon by default)
+    local icon = btn:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(24, 24)
+    icon:SetPoint("CENTER")
+    local defaultIcon = GetSpellTexture(knownBuffs[1].name) or knownBuffs[1].icon
+    icon:SetTexture(defaultIcon)
+    btn.icon = icon
+    btn.currentBuffIcon = nil -- Will be set by UpdateWeaponBuffButton
+
+    -- Create popup for weapon buffs
+    local direction = TotemDeckDB.popupDirection or "UP"
+    local popupIsHorizontal = (direction == "LEFT" or direction == "RIGHT")
+
+    local popup = CreateFrame("Frame", nil, btn, "BackdropTemplate")
+    if popupIsHorizontal then
+        popup:SetSize(#knownBuffs * 40 + 8, 44)
+    else
+        popup:SetSize(44, #knownBuffs * 40 + 8)
+    end
+
+    -- Anchor based on popup direction
+    if direction == "UP" then
+        popup:SetPoint("BOTTOM", btn, "TOP", 0, 2)
+    elseif direction == "DOWN" then
+        popup:SetPoint("TOP", btn, "BOTTOM", 0, -2)
+    elseif direction == "LEFT" then
+        popup:SetPoint("RIGHT", btn, "LEFT", -2, 0)
+    else -- RIGHT
+        popup:SetPoint("LEFT", btn, "RIGHT", 2, 0)
+    end
+
+    popup:SetFrameStrata("DIALOG")
+    popup:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 2,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    popup:SetBackdropColor(0.05, 0.05, 0.05, 0.95)
+    popup:SetBackdropBorderColor(0.4, 0.6, 0.8, 1)
+    popup:Hide()
+    weaponBuffPopup = popup
+
+    -- Create popup buttons for each weapon buff
+    weaponBuffPopupButtons = {}
+    for i, buffData in ipairs(knownBuffs) do
+        buttonCounter = buttonCounter + 1
+        local btnName = "TotemDeckWeaponBuffPopup" .. buttonCounter
+
+        -- Visual frame
+        local visual = CreateFrame("Frame", nil, popup, "BackdropTemplate")
+        visual:SetSize(36, 36)
+        visual:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        visual:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+        visual:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+
+        local buffIcon = visual:CreateTexture(nil, "ARTWORK")
+        buffIcon:SetSize(32, 32)
+        buffIcon:SetPoint("CENTER")
+        local spellIcon = GetSpellTexture(buffData.name)
+        buffIcon:SetTexture(spellIcon or buffData.icon)
+        visual.icon = buffIcon
+
+        -- Secure button on top
+        local popupBtn = CreateFrame("Button", btnName, popup, "SecureActionButtonTemplate")
+        popupBtn:SetSize(36, 36)
+        popupBtn:SetAllPoints(visual)
+        popupBtn:SetFrameLevel(visual:GetFrameLevel() + 1)
+
+        popupBtn.visual = visual
+        popupBtn.border = visual
+        popupBtn.buffName = buffData.name
+
+        -- Get spell ID for tooltip
+        local _, _, _, _, _, _, spellID = GetSpellInfo(buffData.name)
+        popupBtn.spellID = spellID
+
+        -- Register for clicks
+        popupBtn:RegisterForClicks("AnyDown", "AnyUp")
+
+        -- Left click = cast on main hand
+        popupBtn:SetAttribute("type1", "spell")
+        popupBtn:SetAttribute("spell1", buffData.name)
+
+        -- Right click = cast on offhand (uses macro approach)
+        popupBtn:SetAttribute("type2", "macro")
+        popupBtn:SetAttribute("macrotext2", "/use 17\n/cast " .. buffData.name)
+
+        -- Position in popup
+        if direction == "UP" then
+            local yOffset = 4 + (i - 1) * 40
+            visual:SetPoint("BOTTOMLEFT", popup, "BOTTOMLEFT", 4, yOffset)
+        elseif direction == "DOWN" then
+            local yOffset = 4 + (i - 1) * 40
+            visual:SetPoint("TOPLEFT", popup, "TOPLEFT", 4, -yOffset)
+        elseif direction == "LEFT" then
+            local xOffset = 4 + (i - 1) * 40
+            visual:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -xOffset, -4)
+        else -- RIGHT
+            local xOffset = 4 + (i - 1) * 40
+            visual:SetPoint("TOPLEFT", popup, "TOPLEFT", xOffset, -4)
+        end
+
+        -- Tooltip
+        popupBtn:SetScript("OnEnter", function(self)
+            self.border:SetBackdropBorderColor(1, 1, 1, 1)
+            weaponBuffPopupVisible = true -- Keep popup visible
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            if self.spellID then
+                GameTooltip:SetSpellByID(self.spellID)
+            else
+                GameTooltip:SetText(self.buffName, 1, 1, 1)
+            end
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Left-click: Apply to main hand", 0.5, 0.5, 0.5)
+            GameTooltip:AddLine("Right-click: Apply to off-hand", 0.5, 0.5, 0.5)
+            GameTooltip:Show()
+        end)
+
+        popupBtn:SetScript("OnLeave", function(self)
+            self.border:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+            GameTooltip:Hide()
+            -- Delay hiding popup to allow moving to other buttons
+            C_Timer.After(0.15, function()
+                if weaponBuffPopup and weaponBuffButton then
+                    local overAnyBtn = weaponBuffPopup:IsMouseOver() or weaponBuffButton:IsMouseOver()
+                    if not overAnyBtn then
+                        for _, pb in ipairs(weaponBuffPopupButtons) do
+                            if pb:IsMouseOver() then
+                                overAnyBtn = true
+                                break
+                            end
+                        end
+                    end
+                    if not overAnyBtn then
+                        if not InCombatLockdown() then
+                            weaponBuffPopup:Hide()
+                        end
+                        weaponBuffPopupVisible = false
+                    end
+                end
+            end)
+        end)
+
+        visual:Show()
+        popupBtn:Show()
+        weaponBuffPopupButtons[i] = popupBtn
+    end
+
+    -- Main button hover shows popup
+    btn:SetScript("OnEnter", function(self)
+        self.border:SetBackdropBorderColor(1, 1, 1, 1)
+        if not InCombatLockdown() then
+            weaponBuffPopup:Show()
+        end
+        weaponBuffPopupVisible = true
+
+        -- Show tooltip with current weapon enchant info
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Weapon Buffs", 1, 1, 1)
+
+        local enchantInfo = GetCurrentWeaponBuff()
+        if enchantInfo.mainHand and enchantInfo.mainHandBuff then
+            GameTooltip:AddLine("Main Hand: " .. enchantInfo.mainHandBuff.name, 0, 1, 0)
+        elseif enchantInfo.mainHand then
+            GameTooltip:AddLine("Main Hand: Enchanted", 0, 1, 0)
+        else
+            GameTooltip:AddLine("Main Hand: None", 0.5, 0.5, 0.5)
+        end
+        if enchantInfo.offHand and enchantInfo.offHandBuff then
+            GameTooltip:AddLine("Off Hand: " .. enchantInfo.offHandBuff.name, 0, 1, 0)
+        elseif enchantInfo.offHand then
+            GameTooltip:AddLine("Off Hand: Enchanted", 0, 1, 0)
+        else
+            GameTooltip:AddLine("Off Hand: None", 0.5, 0.5, 0.5)
+        end
+        GameTooltip:Show()
+    end)
+
+    btn:SetScript("OnLeave", function(self)
+        -- Restore border color based on enchant state
+        local enchantInfo = GetCurrentWeaponBuff()
+        if enchantInfo.mainHand then
+            self.border:SetBackdropBorderColor(0.2, 0.8, 0.2, 1) -- Green when buffed
+        else
+            self.border:SetBackdropBorderColor(0.8, 0.2, 0.2, 1) -- Red when no buff
+        end
+        GameTooltip:Hide()
+        -- Delay hiding popup to allow moving to it
+        C_Timer.After(0.15, function()
+            if weaponBuffPopup and not weaponBuffPopup:IsMouseOver() and not btn:IsMouseOver() then
+                if not InCombatLockdown() then
+                    weaponBuffPopup:Hide()
+                end
+                weaponBuffPopupVisible = false
+            end
+        end)
+    end)
+
+    -- Popup mouse leave handler
+    popup:SetScript("OnLeave", function(self)
+        C_Timer.After(0.15, function()
+            if weaponBuffPopup and not weaponBuffPopup:IsMouseOver() and not btn:IsMouseOver() then
+                local overAnyBtn = false
+                for _, popBtn in ipairs(weaponBuffPopupButtons) do
+                    if popBtn:IsMouseOver() then
+                        overAnyBtn = true
+                        break
+                    end
+                end
+                if not overAnyBtn then
+                    if not InCombatLockdown() then
+                        weaponBuffPopup:Hide()
+                    end
+                    weaponBuffPopupVisible = false
+                end
+            end
+        end)
+    end)
+
+    weaponBuffButton = btn
+    UpdateWeaponBuffButton()
+end
+
+-- Update Weapon Buff button to show current main-hand enchant icon
+UpdateWeaponBuffButton = function()
+    if not weaponBuffButton then return end
+
+    local enchantInfo = GetCurrentWeaponBuff()
+
+    -- Update icon to show active buff
+    if enchantInfo.mainHand and enchantInfo.mainHandBuff then
+        -- Show the active buff icon
+        local buffIcon = GetSpellTexture(enchantInfo.mainHandBuff.name) or enchantInfo.mainHandBuff.icon
+        weaponBuffButton.icon:SetTexture(buffIcon)
+        weaponBuffButton.icon:SetDesaturated(false)
+        weaponBuffButton.icon:SetAlpha(1)
+        weaponBuffButton.border:SetBackdropBorderColor(0.2, 0.8, 0.2, 1) -- Green when buffed
+    elseif enchantInfo.mainHand then
+        -- Has enchant but we don't know which one (e.g., on login)
+        -- Keep current icon but show green border
+        weaponBuffButton.icon:SetDesaturated(false)
+        weaponBuffButton.icon:SetAlpha(1)
+        weaponBuffButton.border:SetBackdropBorderColor(0.2, 0.8, 0.2, 1) -- Green when buffed
+    else
+        -- No enchant - show first known buff icon, dimmed with red border
+        local knownBuffs = GetKnownWeaponBuffs()
+        if #knownBuffs > 0 then
+            local defaultIcon = GetSpellTexture(knownBuffs[1].name) or knownBuffs[1].icon
+            weaponBuffButton.icon:SetTexture(defaultIcon)
+        end
+        weaponBuffButton.icon:SetDesaturated(true)
+        weaponBuffButton.icon:SetAlpha(0.5)
+        weaponBuffButton.border:SetBackdropBorderColor(0.8, 0.2, 0.2, 1) -- Red when no buff
+    end
 end
 
 -- Create timer frame (position based on timerPosition setting)
@@ -1837,8 +2420,13 @@ eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("PLAYER_TOTEM_UPDATE")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED") -- Entering combat
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED") -- Leaving combat
+eventFrame:RegisterEvent("BAG_UPDATE") -- For Ankh count updates
+eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED") -- For weapon enchant updates
+eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN") -- For Reincarnation cooldown
+eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED") -- For detecting weapon buff casts
+eventFrame:RegisterEvent("UNIT_SPELLCAST_START") -- For tracking pre-cast enchant state
 
-eventFrame:SetScript("OnEvent", function(self, event, arg1)
+eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
     if event == "ADDON_LOADED" and arg1 == addonName then
         -- Initialize saved variables
         if not TotemDeckDB then
@@ -1912,6 +2500,39 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
             UpdateTotemMacro(element)
         end
         pendingActiveUpdates = {}
+
+    elseif event == "BAG_UPDATE" then
+        -- Update Ankh count for Reincarnation button
+        UpdateReincarnationButton()
+
+    elseif event == "UNIT_INVENTORY_CHANGED" then
+        -- Update weapon buff button when equipment changes
+        if arg1 == "player" then
+            UpdateWeaponBuffButton()
+        end
+
+    elseif event == "SPELL_UPDATE_COOLDOWN" then
+        -- Update Reincarnation cooldown display
+        UpdateReincarnationButton()
+
+    elseif event == "UNIT_SPELLCAST_START" then
+        -- Track enchant state before casting a weapon buff
+        if arg1 == "player" and arg3 then
+            local spellName = GetSpellInfo(arg3)
+            if spellName and GetWeaponBuffByName(spellName) then
+                TrackPreCastEnchantState()
+            end
+        end
+
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+        -- Detect when player casts a weapon buff
+        -- In Classic/TBC: UNIT_SPELLCAST_SUCCEEDED(unit, castGUID, spellID)
+        if arg1 == "player" and arg3 then
+            local spellName = GetSpellInfo(arg3)
+            if spellName then
+                OnWeaponBuffCast(spellName)
+            end
+        end
     end
 end)
 
@@ -1952,6 +2573,26 @@ RebuildPopupColumns = function()
         btn:SetParent(nil)
     end
     activeTotemButtons = {}
+
+    -- Destroy reincarnation button
+    if reincarnationButton then
+        reincarnationButton:Hide()
+        reincarnationButton:SetParent(nil)
+        reincarnationButton = nil
+    end
+
+    -- Destroy weapon buff button and popup
+    if weaponBuffPopup then
+        weaponBuffPopup:Hide()
+        weaponBuffPopup:SetParent(nil)
+        weaponBuffPopup = nil
+    end
+    if weaponBuffButton then
+        weaponBuffButton:Hide()
+        weaponBuffButton:SetParent(nil)
+        weaponBuffButton = nil
+    end
+    weaponBuffPopupButtons = {}
 
     -- Destroy and recreate action bar frame with new layout
     local savedPos = nil
