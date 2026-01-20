@@ -132,8 +132,12 @@ function addon.UpdateTimers()
                         bar:Show()
                         bar.statusBar:SetMinMaxValues(0, duration)
                         bar.statusBar:SetValue(remaining)
-                        -- totemName is already localized from GetTotemInfo
-                        bar.text:SetText(totemName:gsub(" Totem", ""))
+                        -- totemName may be nil in some WoW versions
+                        if totemName then
+                            bar.text:SetText(totemName:gsub(" Totem", ""))
+                        else
+                            bar.text:SetText(element)
+                        end
                         bar.timeText:SetText(FormatTime(math.floor(remaining)))
                     elseif bar then
                         bar:Hide()
@@ -150,7 +154,7 @@ function addon.UpdateTimers()
                     end
 
                     -- Update button to show placed totem (if different from active)
-                    if btn then
+                    if btn and totemName then
                         -- Strip rank suffix for comparison (e.g., "Searing Totem VII" -> "Searing Totem")
                         local baseTotemName = totemName:gsub("%s+[IVXLCDM]+$", "")
                         -- Compare localized names (activeTotemName is also localized now)
