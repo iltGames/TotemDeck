@@ -32,6 +32,7 @@ local defaults = {
     showReincarnation = true, -- Show Reincarnation tracker button
     showWeaponBuffs = true, -- Show Weapon Buffs button
     dimOutOfRange = true, -- Dim totem icons when player is out of range
+    popupModifier = "NONE", -- Modifier key required to show popup (NONE, SHIFT, CTRL, ALT)
 }
 
 -- Totem data: name, duration in seconds, icon
@@ -187,6 +188,21 @@ local function IsTotemHidden(element, totemName)
         end
     end
     return false
+end
+
+-- Check if the required popup modifier key is pressed
+local function IsPopupModifierPressed()
+    local modifier = TotemDeckDB and TotemDeckDB.popupModifier or "NONE"
+    if modifier == "NONE" then
+        return true
+    elseif modifier == "SHIFT" then
+        return IsShiftKeyDown()
+    elseif modifier == "CTRL" then
+        return IsControlKeyDown()
+    elseif modifier == "ALT" then
+        return IsAltKeyDown()
+    end
+    return true
 end
 
 -- Check if player has the buff from a totem (for out-of-range detection)
@@ -948,8 +964,8 @@ end
 
 local function CreateTotemRow(parent, totemData, element, index)
     local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(140, 22)
-    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -((index - 1) * 24))
+    row:SetSize(200, 20)
+    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -((index - 1) * 22))
     row.totemName = totemData.name
     row.element = element
 
@@ -1068,7 +1084,7 @@ local function CreateConfigWindow()
     end
 
     local frame = CreateFrame("Frame", "TotemDeckConfigWindow", UIParent, "BackdropTemplate")
-    frame:SetSize(420, 480)
+    frame:SetSize(560, 360)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
     frame:SetMovable(true)
@@ -1149,10 +1165,14 @@ local function CreateConfigWindow()
     layoutContent:SetAllPoints()
     tabContent["layout"] = layoutContent
 
-    local function CreateLayoutSection(parent, sectionTitle, yOffset, height)
+    local function CreateLayoutSection(parent, sectionTitle, yOffset, height, width, xOffset)
         local section = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-        section:SetSize(380, height)
-        section:SetPoint("TOP", parent, "TOP", 0, yOffset)
+        section:SetSize(width or 510, height)
+        if xOffset then
+            section:SetPoint("TOPLEFT", parent, "TOPLEFT", xOffset, yOffset)
+        else
+            section:SetPoint("TOP", parent, "TOP", 0, yOffset)
+        end
         section:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8x8",
             edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -1169,64 +1189,150 @@ local function CreateConfigWindow()
         return section
     end
 
-    local function CreateRadioGroup(parent, options, currentValue, yOffset, onChange)
-        local buttons = {}
+    local function CreateDropdown(parent, label, options, currentValue, x, y, onChange)
+        local container = CreateFrame("Frame", nil, parent)
+        container:SetSize(120, 40)
+        container:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+
+        local labelText = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        labelText:SetPoint("TOPLEFT", 0, 0)
+        labelText:SetText(label)
+        labelText:SetTextColor(1, 0.82, 0)
+
+        local btn = CreateFrame("Button", nil, container, "BackdropTemplate")
+        btn:SetSize(110, 22)
+        btn:SetPoint("TOPLEFT", 0, -14)
+        btn:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        btn:SetBackdropColor(0.1, 0.1, 0.1, 1)
+        btn:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+
+        local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        btnText:SetPoint("LEFT", 8, 0)
+        btn.text = btnText
+
+        local arrow = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        arrow:SetPoint("RIGHT", -6, 0)
+        arrow:SetText("v")
+
+        -- Find current label
+        local function UpdateText()
+            for _, opt in ipairs(options) do
+                if opt.value == currentValue then
+                    btnText:SetText(opt.label)
+                    return
+                end
+            end
+            btnText:SetText(options[1].label)
+        end
+        UpdateText()
+
+        -- Dropdown menu
+        local menu = CreateFrame("Frame", nil, btn, "BackdropTemplate")
+        menu:SetPoint("TOP", btn, "BOTTOM", 0, -2)
+        menu:SetSize(110, #options * 20 + 4)
+        menu:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        menu:SetBackdropColor(0.15, 0.15, 0.15, 1)
+        menu:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+        menu:SetFrameStrata("TOOLTIP")
+        menu:Hide()
+
         for i, opt in ipairs(options) do
-            local btn = CreateFrame("CheckButton", nil, parent, "UIRadioButtonTemplate")
-            btn:SetPoint("TOPLEFT", parent, "TOPLEFT", 10 + ((i-1) % 4) * 90, yOffset)
-            btn:SetScript("OnClick", function(self)
-                for _, b in ipairs(buttons) do b:SetChecked(false) end
-                self:SetChecked(true)
+            local item = CreateFrame("Button", nil, menu)
+            item:SetSize(106, 18)
+            item:SetPoint("TOP", menu, "TOP", 0, -2 - (i-1) * 20)
+            item:SetHighlightTexture("Interface\\Buttons\\WHITE8x8")
+            item:GetHighlightTexture():SetVertexColor(0.3, 0.3, 0.5, 0.5)
+
+            local itemText = item:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            itemText:SetPoint("LEFT", 8, 0)
+            itemText:SetText(opt.label)
+
+            item:SetScript("OnClick", function()
+                currentValue = opt.value
+                btnText:SetText(opt.label)
+                menu:Hide()
                 onChange(opt.value)
             end)
-
-            local text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-            text:SetPoint("LEFT", btn, "RIGHT", 2, 0)
-            text:SetText(opt.label)
-            btn.label = text
-            btn:SetChecked(currentValue == opt.value)
-            buttons[i] = btn
         end
-        return buttons
+
+        btn:SetScript("OnClick", function()
+            if menu:IsShown() then
+                menu:Hide()
+            else
+                menu:Show()
+            end
+        end)
+
+        btn.menu = menu
+        btn.currentValue = currentValue
+        btn.UpdateValue = function(newValue)
+            currentValue = newValue
+            UpdateText()
+        end
+
+        return btn
     end
 
-    -- Popup Direction
-    local popupSection = CreateLayoutSection(layoutContent, "Popup Direction", 0, 70)
-    frame.popupDirButtons = CreateRadioGroup(popupSection, {
+    -- Settings row with dropdowns
+    local settingsSection = CreateLayoutSection(layoutContent, "Settings", 0, 60)
+
+    frame.popupDirDropdown = CreateDropdown(settingsSection, "Popup Direction", {
         { label = "Up", value = "UP" },
         { label = "Down", value = "DOWN" },
         { label = "Left", value = "LEFT" },
         { label = "Right", value = "RIGHT" },
-    }, TotemDeckDB.popupDirection or "UP", -28, function(value)
+    }, TotemDeckDB.popupDirection or "UP", 10, -20, function(value)
         TotemDeckDB.popupDirection = value
         if not InCombatLockdown() then RebuildPopupColumns() end
     end)
 
-    -- Timer Position
-    local timerSection = CreateLayoutSection(layoutContent, "Timer Position", -80, 70)
-    frame.timerPosButtons = CreateRadioGroup(timerSection, {
+    frame.timerPosDropdown = CreateDropdown(settingsSection, "Timer Position", {
         { label = "Above", value = "ABOVE" },
         { label = "Below", value = "BELOW" },
         { label = "Left", value = "LEFT" },
         { label = "Right", value = "RIGHT" },
-    }, TotemDeckDB.timerPosition or "ABOVE", -28, function(value)
+    }, TotemDeckDB.timerPosition or "ABOVE", 135, -20, function(value)
         TotemDeckDB.timerPosition = value
         RebuildTimerFrame()
     end)
 
-    -- Timer Style
-    local timerStyleSection = CreateLayoutSection(layoutContent, "Timer Style", -160, 50)
-    frame.timerStyleButtons = CreateRadioGroup(timerStyleSection, {
+    frame.timerStyleDropdown = CreateDropdown(settingsSection, "Timer Style", {
         { label = "Bars", value = "bars" },
         { label = "Icons", value = "icons" },
-    }, TotemDeckDB.timerStyle or "bars", -28, function(value)
+    }, TotemDeckDB.timerStyle or "bars", 260, -20, function(value)
         TotemDeckDB.timerStyle = value
         UpdateTimers()
     end)
 
-    -- Options
-    local optionsSection = CreateLayoutSection(layoutContent, "Options", -220, 192)
+    frame.popupModDropdown = CreateDropdown(settingsSection, "Popup Modifier", {
+        { label = "None", value = "NONE" },
+        { label = "Shift", value = "SHIFT" },
+        { label = "Ctrl", value = "CTRL" },
+        { label = "Alt", value = "ALT" },
+    }, TotemDeckDB.popupModifier or "NONE", 385, -20, function(value)
+        TotemDeckDB.popupModifier = value
+    end)
 
+    -- Combat warning note
+    local warningText = layoutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    warningText:SetPoint("TOPLEFT", layoutContent, "TOPLEFT", 10, -68)
+    warningText:SetWidth(500)
+    warningText:SetJustifyH("LEFT")
+    warningText:SetText("|cFFFFAA00Note:|r In combat, popup bars are invisible but still clickable (Blizzard blocks hiding frames). Enable 'Always Show Popup' to avoid accidental clicks.")
+    warningText:SetTextColor(0.7, 0.7, 0.7)
+
+    -- Options (full width, 2-column layout for checkboxes)
+    local optionsSection = CreateLayoutSection(layoutContent, "Options", -90, 130)
+
+    -- Left column
     local showTimersCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
     showTimersCheck:SetPoint("TOPLEFT", 10, -28)
     showTimersCheck:SetChecked(TotemDeckDB.showTimers)
@@ -1244,7 +1350,7 @@ local function CreateConfigWindow()
     frame.showTimersCheck = showTimersCheck
 
     local lockPosCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
-    lockPosCheck:SetPoint("TOPLEFT", 10, -54)
+    lockPosCheck:SetPoint("TOPLEFT", 10, -52)
     lockPosCheck:SetChecked(TotemDeckDB.locked)
     lockPosCheck:SetScript("OnClick", function(self)
         TotemDeckDB.locked = self:GetChecked()
@@ -1255,15 +1361,13 @@ local function CreateConfigWindow()
     frame.lockPosCheck = lockPosCheck
 
     local alwaysShowCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
-    alwaysShowCheck:SetPoint("TOPLEFT", 10, -78)
+    alwaysShowCheck:SetPoint("TOPLEFT", 10, -76)
     alwaysShowCheck:SetChecked(TotemDeckDB.alwaysShowPopup)
     alwaysShowCheck:SetScript("OnClick", function(self)
         TotemDeckDB.alwaysShowPopup = self:GetChecked()
         if TotemDeckDB.alwaysShowPopup then
-            -- Show popups immediately
             ShowPopup(GetElementOrder()[1])
         else
-            -- Hide popups
             popupVisible = false
             for _, container in pairs(popupContainers) do
                 if not InCombatLockdown() then
@@ -1280,9 +1384,20 @@ local function CreateConfigWindow()
     alwaysShowLabel:SetText("Always Show Popup")
     frame.alwaysShowCheck = alwaysShowCheck
 
-    -- Show Reincarnation Tracker checkbox
+    local dimRangeCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
+    dimRangeCheck:SetPoint("TOPLEFT", 10, -100)
+    dimRangeCheck:SetChecked(TotemDeckDB.dimOutOfRange)
+    dimRangeCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.dimOutOfRange = self:GetChecked()
+    end)
+    local dimRangeLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    dimRangeLabel:SetPoint("LEFT", dimRangeCheck, "RIGHT", 4, 0)
+    dimRangeLabel:SetText("Dim out of range")
+    frame.dimRangeCheck = dimRangeCheck
+
+    -- Right column
     local showReincCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
-    showReincCheck:SetPoint("TOPLEFT", 10, -104)
+    showReincCheck:SetPoint("TOPLEFT", 260, -28)
     showReincCheck:SetChecked(TotemDeckDB.showReincarnation)
     showReincCheck:SetScript("OnClick", function(self)
         TotemDeckDB.showReincarnation = self:GetChecked()
@@ -1294,12 +1409,11 @@ local function CreateConfigWindow()
     end)
     local showReincLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     showReincLabel:SetPoint("LEFT", showReincCheck, "RIGHT", 4, 0)
-    showReincLabel:SetText("Show Reincarnation Tracker")
+    showReincLabel:SetText("Show Reincarnation")
     frame.showReincCheck = showReincCheck
 
-    -- Show Weapon Buffs checkbox
     local showWeaponCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
-    showWeaponCheck:SetPoint("TOPLEFT", 10, -130)
+    showWeaponCheck:SetPoint("TOPLEFT", 260, -52)
     showWeaponCheck:SetChecked(TotemDeckDB.showWeaponBuffs)
     showWeaponCheck:SetScript("OnClick", function(self)
         TotemDeckDB.showWeaponBuffs = self:GetChecked()
@@ -1314,20 +1428,9 @@ local function CreateConfigWindow()
     showWeaponLabel:SetText("Show Weapon Buffs")
     frame.showWeaponCheck = showWeaponCheck
 
-    local dimRangeCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
-    dimRangeCheck:SetPoint("TOPLEFT", 10, -155)
-    dimRangeCheck:SetChecked(TotemDeckDB.dimOutOfRange)
-    dimRangeCheck:SetScript("OnClick", function(self)
-        TotemDeckDB.dimOutOfRange = self:GetChecked()
-    end)
-    local dimRangeLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    dimRangeLabel:SetPoint("LEFT", dimRangeCheck, "RIGHT", 4, 0)
-    dimRangeLabel:SetText("Dim out of range")
-    frame.dimRangeCheck = dimRangeCheck
-
     local macrosBtn = CreateFrame("Button", nil, optionsSection, "UIPanelButtonTemplate")
     macrosBtn:SetSize(120, 22)
-    macrosBtn:SetPoint("TOPRIGHT", optionsSection, "TOPRIGHT", -10, -30)
+    macrosBtn:SetPoint("TOPLEFT", 260, -76)
     macrosBtn:SetText("Recreate Macros")
     macrosBtn:SetScript("OnClick", function()
         CreateTotemMacros()
@@ -1343,7 +1446,7 @@ local function CreateConfigWindow()
 
     -- Element Order Section (at the top)
     local elementOrderSection = CreateFrame("Frame", nil, orderingContent, "BackdropTemplate")
-    elementOrderSection:SetSize(380, 50)
+    elementOrderSection:SetSize(520, 45)
     elementOrderSection:SetPoint("TOP", orderingContent, "TOP", 0, 0)
     elementOrderSection:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -1380,8 +1483,8 @@ local function CreateConfigWindow()
 
     for i = 1, 4 do
         local btnFrame = CreateFrame("Frame", nil, elementOrderSection, "BackdropTemplate")
-        btnFrame:SetSize(32, 24)
-        btnFrame:SetPoint("LEFT", elementOrderSection, "LEFT", 55 + (i - 1) * 75, -6)
+        btnFrame:SetSize(32, 22)
+        btnFrame:SetPoint("LEFT", elementOrderSection, "LEFT", 70 + (i - 1) * 100, -4)
         btnFrame:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8x8",
             edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -1414,10 +1517,10 @@ local function CreateConfigWindow()
     frame.RefreshElementOrderButtons = RefreshElementOrderButtons
 
     -- Totem Order Sections (shifted down)
-    local sectionWidth = 185
-    local sectionHeight = 120
+    local sectionWidth = 255
+    local sectionHeight = 90
     local sections = {}
-    local totemSectionTopOffset = -55
+    local totemSectionTopOffset = -50
 
     for i, element in ipairs(ELEMENT_ORDER) do
         local color = ELEMENT_COLORS[element]
@@ -1426,7 +1529,7 @@ local function CreateConfigWindow()
 
         local section = CreateFrame("Frame", nil, orderingContent, "BackdropTemplate")
         section:SetSize(sectionWidth, sectionHeight)
-        section:SetPoint("TOPLEFT", orderingContent, "TOPLEFT", col * (sectionWidth + 10), totemSectionTopOffset - row * (sectionHeight + 10))
+        section:SetPoint("TOPLEFT", orderingContent, "TOPLEFT", col * (sectionWidth + 10), totemSectionTopOffset - row * (sectionHeight + 5))
         section:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8x8",
             edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -1441,8 +1544,8 @@ local function CreateConfigWindow()
         label:SetTextColor(color.r, color.g, color.b)
 
         local scrollFrame = CreateFrame("ScrollFrame", nil, section, "UIPanelScrollFrameTemplate")
-        scrollFrame:SetPoint("TOPLEFT", 8, -22)
-        scrollFrame:SetPoint("BOTTOMRIGHT", -28, 8)
+        scrollFrame:SetPoint("TOPLEFT", 8, -20)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -28, 6)
 
         local scrollChild = CreateFrame("Frame", nil, scrollFrame)
         scrollChild:SetSize(sectionWidth - 40, 200)
@@ -1454,7 +1557,7 @@ local function CreateConfigWindow()
     end
 
     local orderButtonContainer = CreateFrame("Frame", nil, orderingContent)
-    orderButtonContainer:SetSize(380, 30)
+    orderButtonContainer:SetSize(520, 26)
     orderButtonContainer:SetPoint("BOTTOM", orderingContent, "BOTTOM", 0, 0)
 
     local resetBtn = CreateFrame("Button", nil, orderButtonContainer, "UIPanelButtonTemplate")
@@ -1655,10 +1758,13 @@ local function CreateActionBarFrame()
             TotemDeckDB.barPos = { point = point, x = x, y = y }
         end)
 
-        -- Show popup on hover
+        -- Show popup on hover (if modifier key is pressed or not required)
         btn:SetScript("OnEnter", function(self)
+            self.isHovering = true
             self.border:SetBackdropBorderColor(1, 1, 1, 1)
-            ShowPopup(self.element, self)
+            if IsPopupModifierPressed() then
+                ShowPopup(self.element, self)
+            end
             -- Show tooltip using spell info
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             if self.showingPlaced and self.placedTotemName then
@@ -1689,6 +1795,7 @@ local function CreateActionBarFrame()
         end)
 
         btn:SetScript("OnLeave", function(self)
+            self.isHovering = false
             if self.showingPlaced then
                 self.border:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
             else
@@ -1698,6 +1805,25 @@ local function CreateActionBarFrame()
             -- Popup hides via OnUpdate check
         end)
 
+        -- Check for modifier key press/release while hovering
+        btn:SetScript("OnUpdate", function(self)
+            if self.isHovering then
+                if not popupVisible and IsPopupModifierPressed() then
+                    ShowPopup(self.element, self)
+                elseif popupVisible and not IsPopupModifierPressed() and not TotemDeckDB.alwaysShowPopup then
+                    -- Hide popup when modifier released (unless alwaysShow is enabled)
+                    popupVisible = false
+                    for _, container in pairs(popupContainers) do
+                        if not InCombatLockdown() then
+                            container:Hide()
+                        else
+                            container:SetAlpha(0)
+                        end
+                    end
+                end
+            end
+        end)
+
         btn.element = element
         btn.color = color
         activeTotemButtons[element] = btn
@@ -1705,14 +1831,34 @@ local function CreateActionBarFrame()
         -- Icon timer display (shown when timerStyle == "icons")
         local iconTimer = CreateFrame("Frame", nil, btn)
         iconTimer:SetSize(40, 16)
-        iconTimer:SetPoint("TOP", btn, "BOTTOM", 0, -2)
 
         local iconTimerText = iconTimer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         iconTimerText:SetPoint("CENTER")
         iconTimerText:SetTextColor(1, 1, 1)
 
+        -- Function to update icon timer position based on timerPosition setting
+        local function UpdateIconTimerPosition()
+            iconTimer:ClearAllPoints()
+            local pos = TotemDeckDB.timerPosition or "ABOVE"
+            if pos == "ABOVE" then
+                iconTimer:SetSize(40, 16)
+                iconTimer:SetPoint("BOTTOM", btn, "TOP", 0, 2)
+            elseif pos == "BELOW" then
+                iconTimer:SetSize(40, 16)
+                iconTimer:SetPoint("TOP", btn, "BOTTOM", 0, -2)
+            elseif pos == "LEFT" then
+                iconTimer:SetSize(40, 16)
+                iconTimer:SetPoint("RIGHT", btn, "LEFT", -2, 0)
+            elseif pos == "RIGHT" then
+                iconTimer:SetSize(40, 16)
+                iconTimer:SetPoint("LEFT", btn, "RIGHT", 2, 0)
+            end
+        end
+        UpdateIconTimerPosition()
+
         btn.iconTimer = iconTimer
         btn.iconTimerText = iconTimerText
+        btn.UpdateIconTimerPosition = UpdateIconTimerPosition
         iconTimer:Hide()
 
         -- Create popup column for this element (anchored to this button)
@@ -2048,13 +2194,14 @@ CreateWeaponBuffButton = function(isVertical)
         weaponBuffPopupButtons[i] = popupBtn
     end
 
-    -- Main button hover shows popup
+    -- Main button hover shows popup (if modifier key is pressed or not required)
     btn:SetScript("OnEnter", function(self)
+        self.isHovering = true
         self.border:SetBackdropBorderColor(1, 1, 1, 1)
-        if not InCombatLockdown() then
+        if IsPopupModifierPressed() and not InCombatLockdown() then
             weaponBuffPopup:Show()
+            weaponBuffPopupVisible = true
         end
-        weaponBuffPopupVisible = true
 
         -- Show tooltip with current weapon enchant info
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -2082,6 +2229,7 @@ CreateWeaponBuffButton = function(isVertical)
     end)
 
     btn:SetScript("OnLeave", function(self)
+        self.isHovering = false
         -- Restore border color based on enchant state
         local enchantInfo = GetCurrentWeaponBuff()
         if enchantInfo.mainHand then
@@ -2099,6 +2247,24 @@ CreateWeaponBuffButton = function(isVertical)
                 weaponBuffPopupVisible = false
             end
         end)
+    end)
+
+    -- Check for modifier key press/release while hovering
+    btn:SetScript("OnUpdate", function(self)
+        if self.isHovering then
+            if not weaponBuffPopupVisible and IsPopupModifierPressed() then
+                if not InCombatLockdown() then
+                    weaponBuffPopup:Show()
+                    weaponBuffPopupVisible = true
+                end
+            elseif weaponBuffPopupVisible and not IsPopupModifierPressed() and not TotemDeckDB.alwaysShowPopup then
+                -- Hide popup when modifier released
+                if not InCombatLockdown() then
+                    weaponBuffPopup:Hide()
+                end
+                weaponBuffPopupVisible = false
+            end
+        end
     end)
 
     -- Popup mouse leave handler
@@ -2626,6 +2792,12 @@ RebuildTimerFrame = function()
     end
     timerBars = {}
     CreateTimerFrame()
+    -- Update icon timer positions for all buttons
+    for _, btn in pairs(activeTotemButtons) do
+        if btn.UpdateIconTimerPosition then
+            btn.UpdateIconTimerPosition()
+        end
+    end
     UpdateTimers()
 end
 
