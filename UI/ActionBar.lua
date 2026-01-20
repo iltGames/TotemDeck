@@ -1,0 +1,257 @@
+-- TotemDeck: ActionBar Module
+-- Main 4-button bar creation
+
+local addonName, addon = ...
+
+-- Local references
+local ELEMENT_COLORS = addon.ELEMENT_COLORS
+local TOTEM_SLOTS = addon.TOTEM_SLOTS
+local GetTotemData = addon.GetTotemData
+local GetElementOrder = addon.GetElementOrder
+local IsPopupModifierPressed = addon.IsPopupModifierPressed
+
+-- Update an active totem button's spell binding
+function addon.UpdateActiveTotemButton(element)
+    local btn = addon.UI.activeTotemButtons[element]
+    if not btn then return end
+
+    local activeKey = "active" .. element
+    local totemName = TotemDeckDB[activeKey]
+    local totemData = GetTotemData(totemName)
+
+    if totemData then
+        btn:SetAttribute("spell1", totemName)
+        btn.icon:SetTexture(totemData.icon)
+        btn.totemName = totemName
+    end
+end
+
+-- Create the action bar with active totem buttons
+function addon.CreateActionBarFrame()
+    local direction = TotemDeckDB.popupDirection or "UP"
+    local isVertical = (direction == "LEFT" or direction == "RIGHT")
+
+    local actionBarFrame = CreateFrame("Frame", "TotemDeckBar", UIParent, "BackdropTemplate")
+    if isVertical then
+        actionBarFrame:SetSize(48, 200) -- Vertical bar
+    else
+        actionBarFrame:SetSize(200, 48) -- Horizontal bar
+    end
+    actionBarFrame:SetPoint(TotemDeckDB.barPos.point, TotemDeckDB.barPos.x, TotemDeckDB.barPos.y)
+
+    actionBarFrame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    actionBarFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
+    actionBarFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+
+    -- Make movable with Ctrl+Click
+    actionBarFrame:SetMovable(true)
+    actionBarFrame:EnableMouse(true)
+    actionBarFrame:SetScript("OnMouseDown", function(self, button)
+        if button == "LeftButton" and IsControlKeyDown() and not TotemDeckDB.locked then
+            self:StartMoving()
+        end
+    end)
+    actionBarFrame:SetScript("OnMouseUp", function(self, button)
+        self:StopMovingOrSizing()
+        local point, _, _, x, y = self:GetPoint()
+        TotemDeckDB.barPos = { point = point, x = x, y = y }
+    end)
+
+    addon.UI.actionBarFrame = actionBarFrame
+
+    -- Create 4 active totem buttons
+    for i, element in ipairs(GetElementOrder()) do
+        local activeKey = "active" .. element
+        local totemName = TotemDeckDB[activeKey]
+        local totemData = GetTotemData(totemName)
+        local color = ELEMENT_COLORS[element]
+
+        local btn = CreateFrame("Button", "TotemDeckActive" .. element, actionBarFrame, "SecureActionButtonTemplate")
+        btn:SetSize(40, 40)
+        if isVertical then
+            btn:SetPoint("TOP", 0, -8 - (i - 1) * 48) -- Stacked vertically
+        else
+            btn:SetPoint("LEFT", 8 + (i - 1) * 48, 0) -- Spaced horizontally
+        end
+
+        -- Add backdrop manually
+        btn.bg = btn:CreateTexture(nil, "BACKGROUND")
+        btn.bg:SetAllPoints()
+        btn.bg:SetColorTexture(0.1, 0.1, 0.1, 0.8)
+
+        btn.border = CreateFrame("Frame", nil, btn, "BackdropTemplate")
+        btn.border:SetPoint("TOPLEFT", -2, 2)
+        btn.border:SetPoint("BOTTOMRIGHT", 2, -2)
+        btn.border:SetBackdrop({
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 2,
+        })
+        btn.border:SetBackdropBorderColor(color.r, color.g, color.b, 1)
+        btn.border:EnableMouse(false) -- Don't intercept clicks
+
+        -- Icon
+        local icon = btn:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(36, 36)
+        icon:SetPoint("CENTER")
+        if totemData then
+            icon:SetTexture(totemData.icon)
+        end
+        btn.icon = icon
+
+        -- Register for clicks BEFORE setting attributes
+        btn:RegisterForClicks("AnyDown", "AnyUp")
+
+        -- Set up secure casting (but not when ctrl is held)
+        btn:SetAttribute("type1", "spell")
+        btn:SetAttribute("ctrl-type1", nil) -- Do nothing on ctrl+click
+        if totemData then
+            btn:SetAttribute("spell1", totemName)
+            btn.totemName = totemName
+        end
+
+        -- Shift+right-click to cast Totemic Call (recall all totems)
+        btn:SetAttribute("shift-type2", "spell")
+        btn:SetAttribute("shift-spell2", "Totemic Call")
+
+        -- Right-click to dismiss totem (but not when shift is held)
+        btn:HookScript("PostClick", function(self, button)
+            if button == "RightButton" and not IsShiftKeyDown() then
+                local slot = TOTEM_SLOTS[self.element]
+                if slot then
+                    DestroyTotem(slot)
+                end
+            end
+        end)
+
+        -- Ctrl+click to move the frame
+        btn:HookScript("OnMouseDown", function(self, button)
+            if button == "LeftButton" and IsControlKeyDown() and not TotemDeckDB.locked then
+                actionBarFrame:StartMoving()
+            end
+        end)
+        btn:HookScript("OnMouseUp", function(self, button)
+            actionBarFrame:StopMovingOrSizing()
+            local point, _, _, x, y = actionBarFrame:GetPoint()
+            TotemDeckDB.barPos = { point = point, x = x, y = y }
+        end)
+
+        -- Show popup on hover (if modifier key is pressed or not required)
+        btn:SetScript("OnEnter", function(self)
+            self.isHovering = true
+            self.border:SetBackdropBorderColor(1, 1, 1, 1)
+            if IsPopupModifierPressed() then
+                addon.ShowPopup(self.element, self)
+            end
+            -- Show tooltip using spell info
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            if self.showingPlaced and self.placedTotemName then
+                -- Show placed totem info
+                local _, _, _, _, _, _, spellID = GetSpellInfo(self.placedTotemName)
+                if spellID then
+                    GameTooltip:SetSpellByID(spellID)
+                else
+                    GameTooltip:SetText(self.placedTotemName, 1, 1, 1)
+                end
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine("Currently placed (not your active totem)", 0.7, 0.7, 0.7)
+            elseif self.totemName then
+                local _, _, _, _, _, _, spellID = GetSpellInfo(self.totemName)
+                if spellID then
+                    GameTooltip:SetSpellByID(spellID)
+                else
+                    GameTooltip:SetText(self.totemName, 1, 1, 1)
+                end
+            else
+                GameTooltip:SetText(self.element .. " Totem", 1, 1, 1)
+            end
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Left-click to cast", 0.5, 0.5, 0.5)
+            GameTooltip:AddLine("Right-click to dismiss", 0.5, 0.5, 0.5)
+            GameTooltip:AddLine("Shift+Right-click for Totemic Call", 0.5, 0.5, 0.5)
+            GameTooltip:Show()
+        end)
+
+        btn:SetScript("OnLeave", function(self)
+            self.isHovering = false
+            if self.showingPlaced then
+                self.border:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+            else
+                self.border:SetBackdropBorderColor(color.r, color.g, color.b, 1)
+            end
+            GameTooltip:Hide()
+            -- Popup hides via OnUpdate check
+        end)
+
+        -- Check for modifier key press/release while hovering
+        btn:SetScript("OnUpdate", function(self)
+            if self.isHovering then
+                if not addon.state.popupVisible and IsPopupModifierPressed() then
+                    addon.ShowPopup(self.element, self)
+                elseif addon.state.popupVisible and not IsPopupModifierPressed() and not TotemDeckDB.alwaysShowPopup then
+                    -- Hide popup when modifier released (unless alwaysShow is enabled)
+                    addon.state.popupVisible = false
+                    for _, container in pairs(addon.UI.popupContainers) do
+                        if not InCombatLockdown() then
+                            container:Hide()
+                        else
+                            container:SetAlpha(0)
+                        end
+                    end
+                end
+            end
+        end)
+
+        btn.element = element
+        btn.color = color
+        addon.UI.activeTotemButtons[element] = btn
+
+        -- Icon timer display (shown when timerStyle == "icons")
+        local iconTimer = CreateFrame("Frame", nil, btn)
+        iconTimer:SetSize(40, 16)
+
+        local iconTimerText = iconTimer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        iconTimerText:SetPoint("CENTER")
+        iconTimerText:SetTextColor(1, 1, 1)
+
+        -- Function to update icon timer position based on timerPosition setting
+        local function UpdateIconTimerPosition()
+            iconTimer:ClearAllPoints()
+            local pos = TotemDeckDB.timerPosition or "ABOVE"
+            if pos == "ABOVE" then
+                iconTimer:SetSize(40, 16)
+                iconTimer:SetPoint("BOTTOM", btn, "TOP", 0, 2)
+            elseif pos == "BELOW" then
+                iconTimer:SetSize(40, 16)
+                iconTimer:SetPoint("TOP", btn, "BOTTOM", 0, -2)
+            elseif pos == "LEFT" then
+                iconTimer:SetSize(40, 16)
+                iconTimer:SetPoint("RIGHT", btn, "LEFT", -2, 0)
+            elseif pos == "RIGHT" then
+                iconTimer:SetSize(40, 16)
+                iconTimer:SetPoint("LEFT", btn, "RIGHT", 2, 0)
+            end
+        end
+        UpdateIconTimerPosition()
+
+        btn.iconTimer = iconTimer
+        btn.iconTimerText = iconTimerText
+        btn.UpdateIconTimerPosition = UpdateIconTimerPosition
+        iconTimer:Hide()
+
+        -- Create popup column for this element (anchored to this button)
+        addon.CreatePopupColumn(element, btn)
+    end
+
+    -- Create Reincarnation tracker button (left/top side)
+    addon.CreateReincarnationButton(isVertical)
+
+    -- Create Weapon Buff button (right/bottom side)
+    addon.CreateWeaponBuffButton(isVertical)
+
+    actionBarFrame:Show()
+end
