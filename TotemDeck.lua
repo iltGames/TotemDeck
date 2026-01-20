@@ -1912,17 +1912,31 @@ CreateReincarnationButton = function(isVertical)
     icon:SetTexture(reincIcon or "Interface\\Icons\\Spell_Nature_Reincarnation")
     btn.icon = icon
 
+    -- Overlay frame for text (above cooldown so it's not dimmed)
+    local textOverlay = CreateFrame("Frame", nil, btn)
+    textOverlay:SetAllPoints()
+    textOverlay:SetFrameLevel(btn:GetFrameLevel() + 10)
+
     -- Ankh count text (bottom-right corner)
-    local countText = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-    countText:SetPoint("BOTTOMRIGHT", -1, 1)
+    local countText = textOverlay:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+    countText:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
     countText:SetTextColor(1, 1, 1)
     btn.countText = countText
 
-    -- Cooldown frame
+    -- Timer text (top, shows cooldown in minutes)
+    local timerText = textOverlay:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+    timerText:SetPoint("TOP", btn, "TOP", 0, -1)
+    timerText:SetTextColor(1, 1, 1)
+    timerText:SetShadowOffset(1, -1)
+    timerText:SetShadowColor(0, 0, 0, 1)
+    btn.timerText = timerText
+
+    -- Cooldown frame (keep for swipe animation)
     local cooldown = CreateFrame("Cooldown", nil, btn, "CooldownFrameTemplate")
     cooldown:SetAllPoints(icon)
     cooldown:SetDrawSwipe(true)
     cooldown:SetDrawEdge(false)
+    cooldown:SetHideCountdownNumbers(true) -- Hide default numbers, we use our own
     btn.cooldown = cooldown
 
     -- Tooltip
@@ -1967,8 +1981,17 @@ UpdateReincarnationButton = function()
     local start, duration, enabled = GetSpellCooldown("Reincarnation")
     if start and duration and duration > 1.5 then
         reincarnationButton.cooldown:SetCooldown(start, duration)
+        -- Calculate remaining time and show in "Xm" format
+        local remaining = (start + duration) - GetTime()
+        if remaining > 0 then
+            local minutes = math.ceil(remaining / 60)
+            reincarnationButton.timerText:SetText(minutes .. "m")
+        else
+            reincarnationButton.timerText:SetText("")
+        end
     else
         reincarnationButton.cooldown:Clear()
+        reincarnationButton.timerText:SetText("")
     end
 
     -- Dim if no Ankhs or on cooldown
@@ -2042,9 +2065,9 @@ CreateWeaponBuffButton = function(isVertical)
     btn.icon = icon
     btn.currentBuffName = defaultBuff -- Track current buff for casting
 
-    -- Timer text (shows remaining weapon buff duration) - overlay on button
-    local timerText = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-    timerText:SetPoint("BOTTOM", btn, "BOTTOM", 0, 1)
+    -- Timer text (shows remaining minutes) - large font overlapping frame
+    local timerText = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+    timerText:SetPoint("CENTER", btn, "CENTER", 0, 0)
     timerText:SetTextColor(1, 1, 1)
     timerText:SetShadowOffset(1, -1)
     timerText:SetShadowColor(0, 0, 0, 1)
@@ -2337,20 +2360,14 @@ UpdateWeaponBuffButton = function()
         weaponBuffButton.currentBuffName = buffToUse
     end
 
-    -- Update timer text
+    -- Update timer text (show minutes with "m" suffix)
     if weaponBuffButton.timerText then
         if enchantInfo.mainHandTime then
             -- mainHandTime is in milliseconds
-            local seconds = math.floor(enchantInfo.mainHandTime / 1000)
-            if seconds >= 60 then
-                weaponBuffButton.timerText:SetText(string.format("%d:%02d", math.floor(seconds / 60), seconds % 60))
-            else
-                weaponBuffButton.timerText:SetText(string.format("%d", seconds))
-            end
-            weaponBuffButton.timerText:Show()
+            local minutes = math.ceil(enchantInfo.mainHandTime / 60000)
+            weaponBuffButton.timerText:SetText(minutes .. "m")
         else
             weaponBuffButton.timerText:SetText("")
-            weaponBuffButton.timerText:Hide()
         end
     end
 end
