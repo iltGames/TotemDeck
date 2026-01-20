@@ -37,8 +37,10 @@ jobs:
       - name: Create addon package
         if: steps.check_tag.outputs.exists == 'false'
         run: |
-          mkdir -p TotemDeck
-          cp TotemDeck.toc TotemDeck.lua README.md TotemDeck/
+          mkdir -p TotemDeck/UI
+          cp TotemDeck.toc README.md LICENSE TotemDeck/
+          cp Core.lua Commands.lua Events.lua Macros.lua TotemDeck/
+          cp UI/*.lua TotemDeck/UI/
           zip -r TotemDeck-${{ steps.version.outputs.version }}.zip TotemDeck
 
       - name: Create Release
