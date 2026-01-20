@@ -96,12 +96,16 @@ end
 
 -- Update timer bars
 function addon.UpdateTimers()
+    local timerFrame = addon.UI.timerFrame
+    local timerBars = addon.UI.timerBars
+    local activeTotemButtons = addon.UI.activeTotemButtons
+
+    -- Guard: UI not initialized yet
+    if not timerFrame then return end
+
     local anyActive = false
     local timerStyle = TotemDeckDB.timerStyle or "bars"
     local showTimers = TotemDeckDB.showTimers
-    local timerBars = addon.UI.timerBars
-    local activeTotemButtons = addon.UI.activeTotemButtons
-    local timerFrame = addon.UI.timerFrame
 
     for slot = 1, 4 do
         local haveTotem, totemName, startTime, duration = GetTotemInfo(slot)
