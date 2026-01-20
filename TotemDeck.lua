@@ -31,6 +31,7 @@ local defaults = {
     },
     showReincarnation = true, -- Show Reincarnation tracker button
     showWeaponBuffs = true, -- Show Weapon Buffs button
+    dimOutOfRange = true, -- Dim totem icons when player is out of range
 }
 
 -- Totem data: name, duration in seconds, icon
@@ -78,6 +79,23 @@ local ELEMENT_COLORS = {
     Fire = { r = 1.0, g = 0.3, b = 0.1 },
     Water = { r = 0.2, g = 0.5, b = 1.0 },
     Air = { r = 0.7, g = 0.7, b = 0.9 },
+}
+
+-- Map totem names to their player buff names (for out-of-range detection)
+local TOTEM_BUFFS = {
+    ["Windfury Totem"] = "Windfury Totem",
+    ["Grace of Air Totem"] = "Grace of Air",
+    ["Tranquil Air Totem"] = "Tranquil Air",
+    ["Wrath of Air Totem"] = "Wrath of Air",
+    ["Windwall Totem"] = "Windwall",
+    ["Strength of Earth Totem"] = "Strength of Earth",
+    ["Stoneskin Totem"] = "Stoneskin",
+    ["Mana Spring Totem"] = "Mana Spring",
+    ["Fire Resistance Totem"] = "Fire Resistance",
+    ["Frost Resistance Totem"] = "Frost Resistance",
+    ["Nature Resistance Totem"] = "Nature Resistance",
+    ["Flametongue Totem"] = "Flametongue Totem",
+    ["Totem of Wrath"] = "Totem of Wrath",
 }
 
 -- Element order for display
@@ -165,6 +183,26 @@ local function IsTotemHidden(element, totemName)
     end
     for _, hidden in ipairs(TotemDeckDB.hiddenTotems[element]) do
         if hidden == totemName then
+            return true
+        end
+    end
+    return false
+end
+
+-- Check if player has the buff from a totem (for out-of-range detection)
+-- Returns: true = has buff (in range), false = no buff (out of range), nil = totem doesn't provide a buff
+local function HasTotemBuff(totemName)
+    local baseName = totemName:gsub("%s+[IVXLCDM]+$", "") -- Strip rank suffix
+    local buffName = TOTEM_BUFFS[baseName]
+    if not buffName then
+        return nil -- Totem doesn't provide a player buff
+    end
+
+    -- Check if player has the buff
+    for i = 1, 40 do
+        local name = UnitBuff("player", i)
+        if not name then break end
+        if name == buffName or name:find(baseName, 1, true) then
             return true
         end
     end
@@ -1187,7 +1225,7 @@ local function CreateConfigWindow()
     end)
 
     -- Options
-    local optionsSection = CreateLayoutSection(layoutContent, "Options", -220, 167)
+    local optionsSection = CreateLayoutSection(layoutContent, "Options", -220, 192)
 
     local showTimersCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
     showTimersCheck:SetPoint("TOPLEFT", 10, -28)
@@ -1275,6 +1313,17 @@ local function CreateConfigWindow()
     showWeaponLabel:SetPoint("LEFT", showWeaponCheck, "RIGHT", 4, 0)
     showWeaponLabel:SetText("Show Weapon Buffs")
     frame.showWeaponCheck = showWeaponCheck
+
+    local dimRangeCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
+    dimRangeCheck:SetPoint("TOPLEFT", 10, -155)
+    dimRangeCheck:SetChecked(TotemDeckDB.dimOutOfRange)
+    dimRangeCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.dimOutOfRange = self:GetChecked()
+    end)
+    local dimRangeLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    dimRangeLabel:SetPoint("LEFT", dimRangeCheck, "RIGHT", 4, 0)
+    dimRangeLabel:SetText("Dim out of range")
+    frame.dimRangeCheck = dimRangeCheck
 
     local macrosBtn = CreateFrame("Button", nil, optionsSection, "UIPanelButtonTemplate")
     macrosBtn:SetSize(120, 22)
@@ -2253,6 +2302,20 @@ UpdateTimers = function()
                             btn.showingPlaced = false
                             btn.placedTotemName = nil
                         end
+
+                        -- Check if player is out of range (buff-based detection)
+                        if TotemDeckDB.dimOutOfRange then
+                            local hasBuff = HasTotemBuff(totemName)
+                            if hasBuff == false then
+                                -- Totem is placed but player doesn't have the buff = out of range
+                                btn.icon:SetAlpha(0.4)
+                            else
+                                -- Has buff (in range) OR totem doesn't provide buffs
+                                btn.icon:SetAlpha(1.0)
+                            end
+                        else
+                            btn.icon:SetAlpha(1.0)
+                        end
                     end
                 else
                     if bar then bar:Hide() end
@@ -2268,6 +2331,10 @@ UpdateTimers = function()
                         btn.showingPlaced = false
                         btn.placedTotemName = nil
                     end
+                    -- Reset alpha when totem expires
+                    if btn then
+                        btn.icon:SetAlpha(1.0)
+                    end
                 end
             else
                 if bar then bar:Hide() end
@@ -2282,6 +2349,10 @@ UpdateTimers = function()
                     btn.border:SetBackdropBorderColor(btn.color.r, btn.color.g, btn.color.b, 1)
                     btn.showingPlaced = false
                     btn.placedTotemName = nil
+                end
+                -- Reset alpha when no totem placed
+                if btn then
+                    btn.icon:SetAlpha(1.0)
                 end
             end
         end
@@ -2332,6 +2403,7 @@ eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED") -- For weapon enchant updates
 eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN") -- For Reincarnation cooldown
 eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED") -- For detecting weapon buff casts
 eventFrame:RegisterEvent("UNIT_SPELLCAST_START") -- For tracking pre-cast enchant state
+eventFrame:RegisterEvent("UNIT_AURA") -- For out-of-range detection via buff checking
 
 eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
     if event == "ADDON_LOADED" and arg1 == addonName then
@@ -2424,6 +2496,12 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
     elseif event == "SPELL_UPDATE_COOLDOWN" then
         -- Update Reincarnation cooldown display
         UpdateReincarnationButton()
+
+    elseif event == "UNIT_AURA" then
+        -- Update totem dimming when player buffs change (for out-of-range detection)
+        if arg1 == "player" then
+            UpdateTimers()
+        end
 
     elseif event == "UNIT_SPELLCAST_START" then
         -- Track enchant state before casting a weapon buff
