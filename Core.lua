@@ -115,12 +115,13 @@ addon.TOTEM_SLOTS = {
     Air = 4,
 }
 
--- Weapon buff data
+-- Weapon buff data: spellID (universal across all languages)
+-- Names are looked up dynamically via GetSpellInfo(spellID)
 addon.WEAPON_BUFFS = {
-    { name = "Rockbiter Weapon", icon = "Interface\\Icons\\Spell_Nature_RockBiter" },
-    { name = "Flametongue Weapon", icon = "Interface\\Icons\\Spell_Fire_FlameToungue" },
-    { name = "Frostbrand Weapon", icon = "Interface\\Icons\\Spell_Frost_FrostBrand" },
-    { name = "Windfury Weapon", icon = "Interface\\Icons\\Spell_Nature_Cyclone" },
+    { spellID = 8017 },  -- Rockbiter Weapon
+    { spellID = 8024 },  -- Flametongue Weapon
+    { spellID = 8033 },  -- Frostbrand Weapon
+    { spellID = 8232 },  -- Windfury Weapon
 }
 
 -- Ankh item ID for Reincarnation
@@ -169,6 +170,18 @@ end
 
 -- Utility: Get totem icon from spell ID
 function addon.GetTotemIcon(spellID)
+    if not spellID then return nil end
+    return GetSpellTexture(spellID)
+end
+
+-- Utility: Get localized weapon buff name from spell ID
+function addon.GetWeaponBuffName(spellID)
+    if not spellID then return nil end
+    return GetSpellInfo(spellID)
+end
+
+-- Utility: Get weapon buff icon from spell ID
+function addon.GetWeaponBuffIcon(spellID)
     if not spellID then return nil end
     return GetSpellTexture(spellID)
 end
@@ -294,20 +307,22 @@ function addon.HasTotemBuff(totemIdentifier)
     return false
 end
 
--- Check if a weapon buff spell is known
-function addon.IsWeaponBuffKnown(buffName)
-    local name, _, _, _, _, _, spellID = GetSpellInfo(buffName)
-    if not spellID then
-        return false
-    end
-    return IsPlayerSpell(spellID)
+-- Check if a weapon buff spell is known (accepts spell ID)
+-- Uses localized name lookup to find any trained rank of the spell
+function addon.IsWeaponBuffKnown(spellID)
+    if not spellID then return false end
+    local name = GetSpellInfo(spellID)
+    if not name then return false end
+    -- GetSpellInfo with a name returns info for the trained rank (if any)
+    local _, _, _, _, _, _, trainedSpellID = GetSpellInfo(name)
+    return trainedSpellID ~= nil
 end
 
 -- Get list of known weapon buffs
 function addon.GetKnownWeaponBuffs()
     local known = {}
     for _, buff in ipairs(addon.WEAPON_BUFFS) do
-        if addon.IsWeaponBuffKnown(buff.name) then
+        if addon.IsWeaponBuffKnown(buff.spellID) then
             table.insert(known, buff)
         end
     end
@@ -338,10 +353,22 @@ function addon.GetCurrentWeaponBuff()
     }
 end
 
+-- Get weapon buff data by spell ID
+function addon.GetWeaponBuffBySpellID(spellID)
+    for _, buff in ipairs(addon.WEAPON_BUFFS) do
+        if buff.spellID == spellID then
+            return buff
+        end
+    end
+    return nil
+end
+
 -- Check if a spell name is a weapon buff and return the buff data
+-- Now works with localized names by looking up each buff's name dynamically
 function addon.GetWeaponBuffByName(spellName)
     for _, buff in ipairs(addon.WEAPON_BUFFS) do
-        if spellName == buff.name then
+        local name = addon.GetWeaponBuffName(buff.spellID)
+        if name == spellName then
             return buff
         end
     end

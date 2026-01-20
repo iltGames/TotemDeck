@@ -31,9 +31,9 @@ function addon.OnWeaponBuffCast(spellName)
             -- Main hand has enchant - assume this cast went to main hand
             -- (most common case - weapon buffs default to main hand)
             addon.state.activeMainHandBuff = buff
-            -- Save to DB for persistence across reloads
+            -- Save spellID to DB for persistence across reloads (language-independent)
             if TotemDeckDB then
-                TotemDeckDB.lastMainHandBuff = buff.name
+                TotemDeckDB.lastMainHandBuff = buff.spellID
             end
         end
 
@@ -41,7 +41,7 @@ function addon.OnWeaponBuffCast(spellName)
         if hasOffHandEnchant and not hasMainHandEnchant then
             addon.state.activeOffHandBuff = buff
             if TotemDeckDB then
-                TotemDeckDB.lastOffHandBuff = buff.name
+                TotemDeckDB.lastOffHandBuff = buff.spellID
             end
         end
 
@@ -49,7 +49,7 @@ function addon.OnWeaponBuffCast(spellName)
         if hasOffHandEnchant and hasMainHandEnchant and preMain and not preOff then
             addon.state.activeOffHandBuff = buff
             if TotemDeckDB then
-                TotemDeckDB.lastOffHandBuff = buff.name
+                TotemDeckDB.lastOffHandBuff = buff.spellID
             end
         end
 
@@ -63,14 +63,16 @@ function addon.RestoreSavedWeaponBuffs()
           hasOffHandEnchant = GetWeaponEnchantInfo()
 
     if hasMainHandEnchant and TotemDeckDB and TotemDeckDB.lastMainHandBuff then
-        local buff = GetWeaponBuffByName(TotemDeckDB.lastMainHandBuff)
+        -- DB now stores spellID instead of name
+        local buff = addon.GetWeaponBuffBySpellID(TotemDeckDB.lastMainHandBuff)
         if buff then
             addon.state.activeMainHandBuff = buff
         end
     end
 
     if hasOffHandEnchant and TotemDeckDB and TotemDeckDB.lastOffHandBuff then
-        local buff = GetWeaponBuffByName(TotemDeckDB.lastOffHandBuff)
+        -- DB now stores spellID instead of name
+        local buff = addon.GetWeaponBuffBySpellID(TotemDeckDB.lastOffHandBuff)
         if buff then
             addon.state.activeOffHandBuff = buff
         end
@@ -109,11 +111,11 @@ function addon.CreateWeaponBuffButton(isVertical)
     btn:RegisterForClicks("AnyDown", "AnyUp")
 
     -- Set up default spell (first known buff, will be updated by UpdateWeaponBuffButton)
-    local defaultBuff = knownBuffs[1].name
+    local defaultBuffName = addon.GetWeaponBuffName(knownBuffs[1].spellID)
     btn:SetAttribute("type1", "spell")
-    btn:SetAttribute("spell1", defaultBuff)
+    btn:SetAttribute("spell1", defaultBuffName)
     btn:SetAttribute("type2", "macro")
-    btn:SetAttribute("macrotext2", "/use 17\n/cast " .. defaultBuff)
+    btn:SetAttribute("macrotext2", "/use 17\n/cast " .. defaultBuffName)
 
     -- Background
     btn.bg = btn:CreateTexture(nil, "BACKGROUND")
@@ -135,10 +137,10 @@ function addon.CreateWeaponBuffButton(isVertical)
     local icon = btn:CreateTexture(nil, "ARTWORK")
     icon:SetSize(24, 24)
     icon:SetPoint("CENTER")
-    local defaultIcon = GetSpellTexture(knownBuffs[1].name) or knownBuffs[1].icon
+    local defaultIcon = addon.GetWeaponBuffIcon(knownBuffs[1].spellID)
     icon:SetTexture(defaultIcon)
     btn.icon = icon
-    btn.currentBuffName = defaultBuff -- Track current buff for casting
+    btn.currentBuffName = defaultBuffName -- Track current buff for casting
 
     -- Timer text (shows remaining minutes) - large font overlapping frame
     local timerText = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
@@ -202,9 +204,12 @@ function addon.CreateWeaponBuffButton(isVertical)
         local buffIcon = visual:CreateTexture(nil, "ARTWORK")
         buffIcon:SetSize(32, 32)
         buffIcon:SetPoint("CENTER")
-        local spellIcon = GetSpellTexture(buffData.name)
-        buffIcon:SetTexture(spellIcon or buffData.icon)
+        local spellIcon = addon.GetWeaponBuffIcon(buffData.spellID)
+        buffIcon:SetTexture(spellIcon)
         visual.icon = buffIcon
+
+        -- Get localized name for casting
+        local buffName = addon.GetWeaponBuffName(buffData.spellID)
 
         -- Secure button on top
         local popupBtn = CreateFrame("Button", btnName, popup, "SecureActionButtonTemplate")
@@ -214,22 +219,19 @@ function addon.CreateWeaponBuffButton(isVertical)
 
         popupBtn.visual = visual
         popupBtn.border = visual
-        popupBtn.buffName = buffData.name
-
-        -- Get spell ID for tooltip
-        local _, _, _, _, _, _, spellID = GetSpellInfo(buffData.name)
-        popupBtn.spellID = spellID
+        popupBtn.buffName = buffName
+        popupBtn.spellID = buffData.spellID  -- Store spell ID for tooltip
 
         -- Register for clicks
         popupBtn:RegisterForClicks("AnyDown", "AnyUp")
 
-        -- Left click = cast on main hand
+        -- Left click = cast on main hand (using localized name)
         popupBtn:SetAttribute("type1", "spell")
-        popupBtn:SetAttribute("spell1", buffData.name)
+        popupBtn:SetAttribute("spell1", buffName)
 
-        -- Right click = cast on offhand (uses macro approach)
+        -- Right click = cast on offhand (uses macro approach with localized name)
         popupBtn:SetAttribute("type2", "macro")
-        popupBtn:SetAttribute("macrotext2", "/use 17\n/cast " .. buffData.name)
+        popupBtn:SetAttribute("macrotext2", "/use 17\n/cast " .. buffName)
 
         -- Position in popup
         if direction == "UP" then
@@ -310,14 +312,16 @@ function addon.CreateWeaponBuffButton(isVertical)
 
         local enchantInfo = GetCurrentWeaponBuff()
         if enchantInfo.mainHand and enchantInfo.mainHandBuff then
-            GameTooltip:AddLine("Main Hand: " .. enchantInfo.mainHandBuff.name, 0, 1, 0)
+            local buffName = addon.GetWeaponBuffName(enchantInfo.mainHandBuff.spellID)
+            GameTooltip:AddLine("Main Hand: " .. (buffName or "Unknown"), 0, 1, 0)
         elseif enchantInfo.mainHand then
             GameTooltip:AddLine("Main Hand: Enchanted", 0, 1, 0)
         else
             GameTooltip:AddLine("Main Hand: None", 0.5, 0.5, 0.5)
         end
         if enchantInfo.offHand and enchantInfo.offHandBuff then
-            GameTooltip:AddLine("Off Hand: " .. enchantInfo.offHandBuff.name, 0, 1, 0)
+            local buffName = addon.GetWeaponBuffName(enchantInfo.offHandBuff.spellID)
+            GameTooltip:AddLine("Off Hand: " .. (buffName or "Unknown"), 0, 1, 0)
         elseif enchantInfo.offHand then
             GameTooltip:AddLine("Off Hand: Enchanted", 0, 1, 0)
         else
@@ -407,13 +411,13 @@ function addon.UpdateWeaponBuffButton()
 
     -- Update icon to show active buff
     if enchantInfo.mainHand and enchantInfo.mainHandBuff then
-        -- Show the active buff icon
-        local buffIcon = GetSpellTexture(enchantInfo.mainHandBuff.name) or enchantInfo.mainHandBuff.icon
+        -- Show the active buff icon (use spellID to get texture)
+        local buffIcon = addon.GetWeaponBuffIcon(enchantInfo.mainHandBuff.spellID)
         weaponBuffButton.icon:SetTexture(buffIcon)
         weaponBuffButton.icon:SetDesaturated(false)
         weaponBuffButton.icon:SetAlpha(1)
         weaponBuffButton.border:SetBackdropBorderColor(0.2, 0.8, 0.2, 1) -- Green when buffed
-        buffToUse = enchantInfo.mainHandBuff.name
+        buffToUse = addon.GetWeaponBuffName(enchantInfo.mainHandBuff.spellID)
     elseif enchantInfo.mainHand then
         -- Has enchant but we don't know which one (e.g., on login)
         -- Keep current icon but show green border
@@ -424,12 +428,12 @@ function addon.UpdateWeaponBuffButton()
         -- No enchant - show last used buff or first known, dimmed with red border
         local knownBuffs = GetKnownWeaponBuffs()
         if #knownBuffs > 0 then
-            -- Use saved buff if available, otherwise first known
-            local savedBuff = TotemDeckDB and TotemDeckDB.lastMainHandBuff
-            local buffData = savedBuff and GetWeaponBuffByName(savedBuff) or knownBuffs[1]
-            local defaultIcon = GetSpellTexture(buffData.name) or buffData.icon
+            -- Use saved buff spellID if available, otherwise first known
+            local savedBuffID = TotemDeckDB and TotemDeckDB.lastMainHandBuff
+            local buffData = savedBuffID and addon.GetWeaponBuffBySpellID(savedBuffID) or knownBuffs[1]
+            local defaultIcon = addon.GetWeaponBuffIcon(buffData.spellID)
             weaponBuffButton.icon:SetTexture(defaultIcon)
-            buffToUse = buffData.name
+            buffToUse = addon.GetWeaponBuffName(buffData.spellID)
         end
         weaponBuffButton.icon:SetDesaturated(true)
         weaponBuffButton.icon:SetAlpha(0.5)
