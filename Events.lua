@@ -10,6 +10,69 @@ local IsShaman = addon.IsShaman
 local GetElementOrder = addon.GetElementOrder
 local GetWeaponBuffByName = addon.GetWeaponBuffByName
 
+-- Migration: Map old English totem names to spell IDs
+local NAME_TO_SPELLID = {
+    -- Earth
+    ["Earthbind Totem"] = 2484,
+    ["Stoneclaw Totem"] = 5730,
+    ["Stoneskin Totem"] = 8071,
+    ["Strength of Earth Totem"] = 8075,
+    ["Tremor Totem"] = 8143,
+    ["Earth Elemental Totem"] = 2062,
+    -- Fire
+    ["Fire Nova Totem"] = 1535,
+    ["Flametongue Totem"] = 8227,
+    ["Frost Resistance Totem"] = 8181,
+    ["Magma Totem"] = 8190,
+    ["Searing Totem"] = 3599,
+    ["Totem of Wrath"] = 30706,
+    ["Fire Elemental Totem"] = 2894,
+    -- Water
+    ["Disease Cleansing Totem"] = 8170,
+    ["Fire Resistance Totem"] = 8184,
+    ["Healing Stream Totem"] = 5394,
+    ["Mana Spring Totem"] = 5675,
+    ["Mana Tide Totem"] = 16190,
+    ["Poison Cleansing Totem"] = 8166,
+    -- Air
+    ["Grace of Air Totem"] = 8835,
+    ["Grounding Totem"] = 8177,
+    ["Nature Resistance Totem"] = 10595,
+    ["Sentry Totem"] = 6495,
+    ["Tranquil Air Totem"] = 25908,
+    ["Windfury Totem"] = 8512,
+    ["Windwall Totem"] = 15107,
+    ["Wrath of Air Totem"] = 3738,
+}
+
+-- Migrate old string-based active totem to spell ID
+local function MigrateTotemNameToID(name)
+    if not name or type(name) ~= "string" then
+        return nil
+    end
+    return NAME_TO_SPELLID[name]
+end
+
+-- Migrate old string-based totem order/hidden lists to spell IDs
+local function MigrateTotemListToIDs(list)
+    if not list or type(list) ~= "table" then
+        return {}
+    end
+    local migrated = {}
+    for _, item in ipairs(list) do
+        if type(item) == "string" then
+            local spellID = NAME_TO_SPELLID[item]
+            if spellID then
+                table.insert(migrated, spellID)
+            end
+        elseif type(item) == "number" then
+            -- Already a spell ID
+            table.insert(migrated, item)
+        end
+    end
+    return migrated
+end
+
 -- Event frame
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
@@ -35,6 +98,21 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
                 TotemDeckDB[key] = value
             end
         end
+
+        -- Migration: Convert old string-based active totems to spell IDs
+        if type(TotemDeckDB.activeEarth) == "string" then
+            TotemDeckDB.activeEarth = MigrateTotemNameToID(TotemDeckDB.activeEarth) or defaults.activeEarth
+        end
+        if type(TotemDeckDB.activeFire) == "string" then
+            TotemDeckDB.activeFire = MigrateTotemNameToID(TotemDeckDB.activeFire) or defaults.activeFire
+        end
+        if type(TotemDeckDB.activeWater) == "string" then
+            TotemDeckDB.activeWater = MigrateTotemNameToID(TotemDeckDB.activeWater) or defaults.activeWater
+        end
+        if type(TotemDeckDB.activeAir) == "string" then
+            TotemDeckDB.activeAir = MigrateTotemNameToID(TotemDeckDB.activeAir) or defaults.activeAir
+        end
+
         -- Ensure elementOrder has all 4 elements
         if not TotemDeckDB.elementOrder or #TotemDeckDB.elementOrder ~= 4 then
             TotemDeckDB.elementOrder = { "Earth", "Fire", "Water", "Air" }
@@ -46,6 +124,12 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         for _, element in ipairs(ELEMENT_ORDER) do
             if not TotemDeckDB.totemOrder[element] then
                 TotemDeckDB.totemOrder[element] = {}
+            else
+                -- Migration: Convert old string-based totem order to spell IDs
+                local first = TotemDeckDB.totemOrder[element][1]
+                if first and type(first) == "string" then
+                    TotemDeckDB.totemOrder[element] = MigrateTotemListToIDs(TotemDeckDB.totemOrder[element])
+                end
             end
         end
         -- Ensure hiddenTotems has all element keys
@@ -55,6 +139,12 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         for _, element in ipairs(ELEMENT_ORDER) do
             if not TotemDeckDB.hiddenTotems[element] then
                 TotemDeckDB.hiddenTotems[element] = {}
+            else
+                -- Migration: Convert old string-based hidden totems to spell IDs
+                local first = TotemDeckDB.hiddenTotems[element][1]
+                if first and type(first) == "string" then
+                    TotemDeckDB.hiddenTotems[element] = MigrateTotemListToIDs(TotemDeckDB.hiddenTotems[element])
+                end
             end
         end
 

@@ -16,13 +16,17 @@ function addon.UpdateActiveTotemButton(element)
     if not btn then return end
 
     local activeKey = "active" .. element
-    local totemName = TotemDeckDB[activeKey]
-    local totemData = GetTotemData(totemName)
+    local spellID = TotemDeckDB[activeKey]
+    local totemData = GetTotemData(spellID)
 
     if totemData then
+        -- Cast by name so WoW auto-selects highest trained rank
+        local totemName = addon.GetTotemName(spellID)
         btn:SetAttribute("spell1", totemName)
-        btn.icon:SetTexture(totemData.icon)
-        btn.totemName = totemName
+        -- Get icon from spell ID
+        btn.icon:SetTexture(addon.GetTotemIcon(spellID))
+        btn.spellID = spellID
+        btn.totemName = totemName  -- Cache localized name for tooltips
     end
 end
 
@@ -67,8 +71,8 @@ function addon.CreateActionBarFrame()
     -- Create 4 active totem buttons
     for i, element in ipairs(GetElementOrder()) do
         local activeKey = "active" .. element
-        local totemName = TotemDeckDB[activeKey]
-        local totemData = GetTotemData(totemName)
+        local spellID = TotemDeckDB[activeKey]
+        local totemData = GetTotemData(spellID)
         local color = ELEMENT_COLORS[element]
 
         local btn = CreateFrame("Button", "TotemDeckActive" .. element, actionBarFrame, "SecureActionButtonTemplate")
@@ -99,7 +103,7 @@ function addon.CreateActionBarFrame()
         icon:SetSize(36, 36)
         icon:SetPoint("CENTER")
         if totemData then
-            icon:SetTexture(totemData.icon)
+            icon:SetTexture(addon.GetTotemIcon(spellID))
         end
         btn.icon = icon
 
@@ -110,8 +114,11 @@ function addon.CreateActionBarFrame()
         btn:SetAttribute("type1", "spell")
         btn:SetAttribute("ctrl-type1", nil) -- Do nothing on ctrl+click
         if totemData then
+            -- Cast by name so WoW auto-selects highest trained rank
+            local totemName = addon.GetTotemName(spellID)
             btn:SetAttribute("spell1", totemName)
-            btn.totemName = totemName
+            btn.spellID = spellID
+            btn.totemName = totemName  -- Cache localized name for tooltips
         end
 
         -- Shift+right-click to cast Totemic Call (recall all totems)
@@ -149,23 +156,17 @@ function addon.CreateActionBarFrame()
             end
             -- Show tooltip using spell info
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            if self.showingPlaced and self.placedTotemName then
-                -- Show placed totem info
-                local _, _, _, _, _, _, spellID = GetSpellInfo(self.placedTotemName)
-                if spellID then
-                    GameTooltip:SetSpellByID(spellID)
-                else
-                    GameTooltip:SetText(self.placedTotemName, 1, 1, 1)
-                end
+            if self.showingPlaced and self.placedSpellID then
+                -- Show placed totem info using spell ID
+                GameTooltip:SetSpellByID(self.placedSpellID)
                 GameTooltip:AddLine(" ")
                 GameTooltip:AddLine("Currently placed (not your active totem)", 0.7, 0.7, 0.7)
+            elseif self.spellID then
+                -- Use highest trained rank for tooltip
+                local trainedID = addon.GetHighestRankSpellID(self.spellID) or self.spellID
+                GameTooltip:SetSpellByID(trainedID)
             elseif self.totemName then
-                local _, _, _, _, _, _, spellID = GetSpellInfo(self.totemName)
-                if spellID then
-                    GameTooltip:SetSpellByID(spellID)
-                else
-                    GameTooltip:SetText(self.totemName, 1, 1, 1)
-                end
+                GameTooltip:SetText(self.totemName, 1, 1, 1)
             else
                 GameTooltip:SetText(self.element .. " Totem", 1, 1, 1)
             end

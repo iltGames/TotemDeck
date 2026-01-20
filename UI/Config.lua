@@ -14,8 +14,8 @@ local function SaveTotemOrder(element)
     local configTotemRows = addon.UI.configTotemRows
     local order = {}
     for _, row in ipairs(configTotemRows[element] or {}) do
-        if row.totemName then
-            table.insert(order, row.totemName)
+        if row.spellID then
+            table.insert(order, row.spellID)
         end
     end
     TotemDeckDB.totemOrder[element] = order
@@ -57,8 +57,11 @@ local function CreateTotemRow(parent, totemData, element, index)
     local row = CreateFrame("Frame", nil, parent)
     row:SetSize(200, 20)
     row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -((index - 1) * 22))
-    row.totemName = totemData.name
+    row.spellID = totemData.spellID  -- Store spell ID instead of name
     row.element = element
+
+    -- Get localized name from spell ID
+    local totemName = addon.GetTotemName(totemData.spellID) or "Unknown"
 
     local upBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     upBtn:SetSize(16, 16)
@@ -91,14 +94,14 @@ local function CreateTotemRow(parent, totemData, element, index)
     local icon = row:CreateTexture(nil, "ARTWORK")
     icon:SetSize(16, 16)
     icon:SetPoint("LEFT", downBtn, "RIGHT", 2, 0)
-    icon:SetTexture(GetSpellTexture(totemData.name) or totemData.icon)
+    icon:SetTexture(addon.GetTotemIcon(totemData.spellID))  -- Use spell ID for icon
     row.icon = icon
 
     local name = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     name:SetPoint("LEFT", icon, "RIGHT", 2, 0)
     name:SetPoint("RIGHT", row, "RIGHT", -18, 0)
     name:SetJustifyH("LEFT")
-    name:SetText(totemData.name:gsub(" Totem", ""))
+    name:SetText(totemName:gsub(" Totem", ""))  -- Use localized name
     row.nameText = name
 
     -- Hide/show toggle button
@@ -107,7 +110,7 @@ local function CreateTotemRow(parent, totemData, element, index)
     hideBtn:SetPoint("RIGHT", row, "RIGHT", 0, 0)
 
     local function UpdateHideState()
-        if IsTotemHidden(element, totemData.name) then
+        if IsTotemHidden(element, totemData.spellID) then  -- Use spell ID
             hideBtn:SetText("O")
             row.icon:SetAlpha(0.4)
             row.nameText:SetAlpha(0.4)
@@ -120,24 +123,24 @@ local function CreateTotemRow(parent, totemData, element, index)
 
     hideBtn:SetScript("OnClick", function()
         local hidden = TotemDeckDB.hiddenTotems[element]
-        if IsTotemHidden(element, totemData.name) then
+        if IsTotemHidden(element, totemData.spellID) then  -- Use spell ID
             -- Remove from hidden list
-            for i, hiddenName in ipairs(hidden) do
-                if hiddenName == totemData.name then
+            for i, hiddenID in ipairs(hidden) do
+                if hiddenID == totemData.spellID then
                     table.remove(hidden, i)
                     break
                 end
             end
         else
-            -- Add to hidden list
-            table.insert(hidden, totemData.name)
+            -- Add to hidden list (using spell ID)
+            table.insert(hidden, totemData.spellID)
         end
         UpdateHideState()
     end)
 
     hideBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        if IsTotemHidden(element, totemData.name) then
+        if IsTotemHidden(element, totemData.spellID) then  -- Use spell ID
             GameTooltip:SetText("Click to show in popup")
         else
             GameTooltip:SetText("Click to hide from popup")

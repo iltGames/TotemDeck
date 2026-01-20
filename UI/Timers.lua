@@ -118,7 +118,8 @@ function addon.UpdateTimers()
         if element then
             local bar = timerBars[element]
             local btn = activeTotemButtons[element]
-            local activeTotemName = TotemDeckDB["active" .. element]
+            local activeSpellID = TotemDeckDB["active" .. element]
+            local activeTotemName = addon.GetTotemName(activeSpellID)
 
             if haveTotem and duration > 0 then
                 local remaining = (startTime + duration) - GetTime()
@@ -131,6 +132,7 @@ function addon.UpdateTimers()
                         bar:Show()
                         bar.statusBar:SetMinMaxValues(0, duration)
                         bar.statusBar:SetValue(remaining)
+                        -- totemName is already localized from GetTotemInfo
                         bar.text:SetText(totemName:gsub(" Totem", ""))
                         bar.timeText:SetText(FormatTime(math.floor(remaining)))
                     elseif bar then
@@ -151,7 +153,8 @@ function addon.UpdateTimers()
                     if btn then
                         -- Strip rank suffix for comparison (e.g., "Searing Totem VII" -> "Searing Totem")
                         local baseTotemName = totemName:gsub("%s+[IVXLCDM]+$", "")
-                        if baseTotemName ~= activeTotemName then
+                        -- Compare localized names (activeTotemName is also localized now)
+                        if activeTotemName and baseTotemName ~= activeTotemName then
                             -- Placed totem differs from active - show with visual indicator
                             local placedIcon = GetSpellTexture(baseTotemName) or GetSpellTexture(totemName)
                             if placedIcon then
@@ -160,10 +163,13 @@ function addon.UpdateTimers()
                                 btn.border:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
                                 btn.showingPlaced = true
                                 btn.placedTotemName = totemName
+                                -- Try to get spell ID for the placed totem for tooltip
+                                local _, _, _, _, _, _, placedSpellID = GetSpellInfo(baseTotemName)
+                                btn.placedSpellID = placedSpellID
                             end
                         elseif btn.showingPlaced then
                             -- Placed totem matches active - revert to normal display
-                            local activeIcon = GetSpellTexture(activeTotemName)
+                            local activeIcon = addon.GetTotemIcon(activeSpellID)
                             if activeIcon then
                                 btn.icon:SetTexture(activeIcon)
                             end
@@ -171,6 +177,7 @@ function addon.UpdateTimers()
                             btn.border:SetBackdropBorderColor(btn.color.r, btn.color.g, btn.color.b, 1)
                             btn.showingPlaced = false
                             btn.placedTotemName = nil
+                            btn.placedSpellID = nil
                         end
 
                         -- Check if player is out of range (buff-based detection)
@@ -192,7 +199,7 @@ function addon.UpdateTimers()
                     if btn and btn.iconTimer then btn.iconTimer:Hide() end
                     -- Revert button display when totem expires
                     if btn and btn.showingPlaced then
-                        local activeIcon = GetSpellTexture(activeTotemName)
+                        local activeIcon = addon.GetTotemIcon(activeSpellID)
                         if activeIcon then
                             btn.icon:SetTexture(activeIcon)
                         end
@@ -200,6 +207,7 @@ function addon.UpdateTimers()
                         btn.border:SetBackdropBorderColor(btn.color.r, btn.color.g, btn.color.b, 1)
                         btn.showingPlaced = false
                         btn.placedTotemName = nil
+                        btn.placedSpellID = nil
                     end
                     -- Reset alpha when totem expires
                     if btn then
@@ -211,7 +219,7 @@ function addon.UpdateTimers()
                 if btn and btn.iconTimer then btn.iconTimer:Hide() end
                 -- Revert button display when no totem placed
                 if btn and btn.showingPlaced then
-                    local activeIcon = GetSpellTexture(activeTotemName)
+                    local activeIcon = addon.GetTotemIcon(activeSpellID)
                     if activeIcon then
                         btn.icon:SetTexture(activeIcon)
                     end
@@ -219,6 +227,7 @@ function addon.UpdateTimers()
                     btn.border:SetBackdropBorderColor(btn.color.r, btn.color.g, btn.color.b, 1)
                     btn.showingPlaced = false
                     btn.placedTotemName = nil
+                    btn.placedSpellID = nil
                 end
                 -- Reset alpha when no totem placed
                 if btn then

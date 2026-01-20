@@ -6,12 +6,12 @@ local addonName, addon = ...
 -- Export addon table for other modules
 addon.addonName = addonName
 
--- Default saved variables
+-- Default saved variables (using spell IDs for language-independent storage)
 addon.defaults = {
-    activeEarth = "Strength of Earth Totem",
-    activeFire = "Searing Totem",
-    activeWater = "Mana Spring Totem",
-    activeAir = "Windfury Totem",
+    activeEarth = 8075,  -- Strength of Earth Totem
+    activeFire = 3599,   -- Searing Totem
+    activeWater = 5675,  -- Mana Spring Totem
+    activeAir = 8512,    -- Windfury Totem
     barPos = { point = "CENTER", x = 0, y = -200 },
     showTimers = true,
     locked = false,
@@ -38,42 +38,43 @@ addon.defaults = {
     popupModifier = "NONE", -- Modifier key required to show popup (NONE, SHIFT, CTRL, ALT)
 }
 
--- Totem data: name, duration in seconds, icon
+-- Totem data: spellID (universal across all languages), duration in seconds
+-- Names are looked up dynamically via GetSpellInfo(spellID)
 addon.TOTEMS = {
     Earth = {
-        { name = "Earthbind Totem", duration = 45, icon = "Interface\\Icons\\Spell_Nature_StrengthOfEarthTotem02" },
-        { name = "Stoneclaw Totem", duration = 15, icon = "Interface\\Icons\\Spell_Nature_StoneClawTotem" },
-        { name = "Stoneskin Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_StoneSkinTotem" },
-        { name = "Strength of Earth Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_EarthBindTotem" },
-        { name = "Tremor Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_TremorTotem" },
-        { name = "Earth Elemental Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_EarthElemental_Totem" },
+        { spellID = 2484, duration = 45 },   -- Earthbind Totem
+        { spellID = 5730, duration = 15 },   -- Stoneclaw Totem
+        { spellID = 8071, duration = 120 },  -- Stoneskin Totem
+        { spellID = 8075, duration = 120 },  -- Strength of Earth Totem
+        { spellID = 8143, duration = 120 },  -- Tremor Totem
+        { spellID = 2062, duration = 120 },  -- Earth Elemental Totem
     },
     Fire = {
-        { name = "Fire Nova Totem", duration = 5, icon = "Interface\\Icons\\Spell_Fire_SealOfFire" },
-        { name = "Flametongue Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_GuardianWard" },
-        { name = "Frost Resistance Totem", duration = 120, icon = "Interface\\Icons\\Spell_FrostResistanceTotem_01" },
-        { name = "Magma Totem", duration = 20, icon = "Interface\\Icons\\Spell_Fire_SelfDestruct" },
-        { name = "Searing Totem", duration = 60, icon = "Interface\\Icons\\Spell_Fire_SearingTotem" },
-        { name = "Totem of Wrath", duration = 120, icon = "Interface\\Icons\\Spell_Fire_TotemOfWrath" },
-        { name = "Fire Elemental Totem", duration = 120, icon = "Interface\\Icons\\Spell_Fire_Elemental_Totem" },
+        { spellID = 1535, duration = 5 },    -- Fire Nova Totem
+        { spellID = 8227, duration = 120 },  -- Flametongue Totem
+        { spellID = 8181, duration = 120 },  -- Frost Resistance Totem
+        { spellID = 8190, duration = 20 },   -- Magma Totem
+        { spellID = 3599, duration = 60 },   -- Searing Totem
+        { spellID = 30706, duration = 120 }, -- Totem of Wrath
+        { spellID = 2894, duration = 120 },  -- Fire Elemental Totem
     },
     Water = {
-        { name = "Disease Cleansing Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_DiseaseCleansingTotem" },
-        { name = "Fire Resistance Totem", duration = 120, icon = "Interface\\Icons\\Spell_FireResistanceTotem_01" },
-        { name = "Healing Stream Totem", duration = 120, icon = "Interface\\Icons\\INV_Spear_04" },
-        { name = "Mana Spring Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_ManaRegenTotem" },
-        { name = "Mana Tide Totem", duration = 12, icon = "Interface\\Icons\\Spell_Frost_SummonWaterElemental" },
-        { name = "Poison Cleansing Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_PoisonCleansingTotem" },
+        { spellID = 8170, duration = 120 },  -- Disease Cleansing Totem
+        { spellID = 8184, duration = 120 },  -- Fire Resistance Totem
+        { spellID = 5394, duration = 120 },  -- Healing Stream Totem
+        { spellID = 5675, duration = 120 },  -- Mana Spring Totem
+        { spellID = 16190, duration = 12 },  -- Mana Tide Totem
+        { spellID = 8166, duration = 120 },  -- Poison Cleansing Totem
     },
     Air = {
-        { name = "Grace of Air Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_InvisibilityTotem" },
-        { name = "Grounding Totem", duration = 45, icon = "Interface\\Icons\\Spell_Nature_GroundingTotem" },
-        { name = "Nature Resistance Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_NatureResistanceTotem" },
-        { name = "Sentry Totem", duration = 300, icon = "Interface\\Icons\\Spell_Nature_RemoveCurse" },
-        { name = "Tranquil Air Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_Brilliance" },
-        { name = "Windfury Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_Windfury" },
-        { name = "Windwall Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_EarthBind" },
-        { name = "Wrath of Air Totem", duration = 120, icon = "Interface\\Icons\\Spell_Nature_SlowingTotem" },
+        { spellID = 8835, duration = 120 },  -- Grace of Air Totem
+        { spellID = 8177, duration = 45 },   -- Grounding Totem
+        { spellID = 10595, duration = 120 }, -- Nature Resistance Totem
+        { spellID = 6495, duration = 300 },  -- Sentry Totem
+        { spellID = 25908, duration = 120 }, -- Tranquil Air Totem
+        { spellID = 8512, duration = 120 },  -- Windfury Totem
+        { spellID = 15107, duration = 120 }, -- Windwall Totem
+        { spellID = 3738, duration = 120 },  -- Wrath of Air Totem
     },
 }
 
@@ -85,21 +86,22 @@ addon.ELEMENT_COLORS = {
     Air = { r = 0.7, g = 0.7, b = 0.9 },
 }
 
--- Map totem names to their player buff names (for out-of-range detection)
-addon.TOTEM_BUFFS = {
-    ["Windfury Totem"] = "Windfury Totem",
-    ["Grace of Air Totem"] = "Grace of Air",
-    ["Tranquil Air Totem"] = "Tranquil Air",
-    ["Wrath of Air Totem"] = "Wrath of Air",
-    ["Windwall Totem"] = "Windwall",
-    ["Strength of Earth Totem"] = "Strength of Earth",
-    ["Stoneskin Totem"] = "Stoneskin",
-    ["Mana Spring Totem"] = "Mana Spring",
-    ["Fire Resistance Totem"] = "Fire Resistance",
-    ["Frost Resistance Totem"] = "Frost Resistance",
-    ["Nature Resistance Totem"] = "Nature Resistance",
-    ["Flametongue Totem"] = "Flametongue Totem",
-    ["Totem of Wrath"] = "Totem of Wrath",
+-- Map totem spell IDs to whether they provide a player buff (for out-of-range detection)
+-- Value is true if the totem provides a buff that can be checked
+addon.TOTEM_PROVIDES_BUFF = {
+    [8512] = true,   -- Windfury Totem
+    [8835] = true,   -- Grace of Air Totem
+    [25908] = true,  -- Tranquil Air Totem
+    [3738] = true,   -- Wrath of Air Totem
+    [15107] = true,  -- Windwall Totem
+    [8075] = true,   -- Strength of Earth Totem
+    [8071] = true,   -- Stoneskin Totem
+    [5675] = true,   -- Mana Spring Totem
+    [8184] = true,   -- Fire Resistance Totem
+    [8181] = true,   -- Frost Resistance Totem
+    [10595] = true,  -- Nature Resistance Totem
+    [8227] = true,   -- Flametongue Totem
+    [30706] = true,  -- Totem of Wrath
 }
 
 -- Element order for display
@@ -158,16 +160,34 @@ function addon.IsShaman()
     return class == "SHAMAN"
 end
 
--- Utility: Get totem data by name
-function addon.GetTotemData(totemName)
+-- Utility: Get localized totem name from spell ID
+function addon.GetTotemName(spellID)
+    if not spellID then return nil end
+    local name = GetSpellInfo(spellID)
+    return name
+end
+
+-- Utility: Get totem icon from spell ID
+function addon.GetTotemIcon(spellID)
+    if not spellID then return nil end
+    return GetSpellTexture(spellID)
+end
+
+-- Utility: Get totem data by spell ID
+function addon.GetTotemBySpellID(spellID)
     for element, totems in pairs(addon.TOTEMS) do
         for _, totem in ipairs(totems) do
-            if totem.name == totemName then
+            if totem.spellID == spellID then
                 return totem, element
             end
         end
     end
     return nil, nil
+end
+
+-- Utility: Get totem data by spell ID (alias for compatibility)
+function addon.GetTotemData(spellID)
+    return addon.GetTotemBySpellID(spellID)
 end
 
 -- Get element order (saved or default)
@@ -178,22 +198,33 @@ function addon.GetElementOrder()
     return addon.ELEMENT_ORDER
 end
 
--- Check if a totem spell is trained
-function addon.IsTotemKnown(totemName)
-    local name, _, _, _, _, _, spellID = GetSpellInfo(totemName)
-    if not spellID then
-        return false
-    end
-    return IsPlayerSpell(spellID)
+-- Check if a totem spell is trained (accepts spell ID)
+-- Uses localized name lookup to find any trained rank of the spell
+function addon.IsTotemKnown(spellID)
+    if not spellID then return false end
+    local name = GetSpellInfo(spellID)
+    if not name then return false end
+    -- GetSpellInfo with a name returns info for the trained rank (if any)
+    local _, _, _, _, _, _, trainedSpellID = GetSpellInfo(name)
+    return trainedSpellID ~= nil
 end
 
--- Check if a totem is hidden by the user
-function addon.IsTotemHidden(element, totemName)
+-- Get the highest trained rank's spell ID for a base spell
+-- Useful for tooltip display or when we need the actual trained spell ID
+function addon.GetHighestRankSpellID(baseSpellID)
+    local name = GetSpellInfo(baseSpellID)
+    if not name then return nil end
+    local _, _, _, _, _, _, trainedSpellID = GetSpellInfo(name)
+    return trainedSpellID
+end
+
+-- Check if a totem is hidden by the user (accepts spell ID)
+function addon.IsTotemHidden(element, spellID)
     if not TotemDeckDB or not TotemDeckDB.hiddenTotems or not TotemDeckDB.hiddenTotems[element] then
         return false
     end
     for _, hidden in ipairs(TotemDeckDB.hiddenTotems[element]) do
-        if hidden == totemName then
+        if hidden == spellID then
             return true
         end
     end
@@ -217,18 +248,46 @@ end
 
 -- Check if player has the buff from a totem (for out-of-range detection)
 -- Returns: true = has buff (in range), false = no buff (out of range), nil = totem doesn't provide a buff
-function addon.HasTotemBuff(totemName)
-    local baseName = totemName:gsub("%s+[IVXLCDM]+$", "") -- Strip rank suffix
-    local buffName = addon.TOTEM_BUFFS[baseName]
-    if not buffName then
-        return nil -- Totem doesn't provide a player buff
+-- Now accepts either spellID or localized totem name
+function addon.HasTotemBuff(totemIdentifier)
+    local spellID
+    if type(totemIdentifier) == "number" then
+        spellID = totemIdentifier
+    else
+        -- Try to find spell ID from name (for backward compatibility with GetTotemInfo)
+        local name, _, _, _, _, _, sid = GetSpellInfo(totemIdentifier)
+        spellID = sid
+        -- If we still don't have a spell ID, try to match to our totem list
+        if not spellID then
+            for element, totems in pairs(addon.TOTEMS) do
+                for _, totem in ipairs(totems) do
+                    local totemName = addon.GetTotemName(totem.spellID)
+                    -- Strip rank suffix from both for comparison
+                    local baseName = totemIdentifier:gsub("%s+[IVXLCDM]+$", "")
+                    if totemName and totemName:find(baseName, 1, true) then
+                        spellID = totem.spellID
+                        break
+                    end
+                end
+                if spellID then break end
+            end
+        end
     end
 
-    -- Check if player has the buff
+    if not spellID or not addon.TOTEM_PROVIDES_BUFF[spellID] then
+        return nil -- Totem doesn't provide a player buff we can check
+    end
+
+    -- Get localized totem name for buff checking
+    local totemName = addon.GetTotemName(spellID)
+    if not totemName then return nil end
+
+    -- Check if player has the buff (using localized name)
     for i = 1, 40 do
         local name = UnitBuff("player", i)
         if not name then break end
-        if name == buffName or name:find(baseName, 1, true) then
+        -- Check for exact match or partial match (buff name may be shorter)
+        if name == totemName or totemName:find(name, 1, true) or name:find(totemName:gsub(" Totem$", ""), 1, true) then
             return true
         end
     end
@@ -290,17 +349,18 @@ function addon.GetWeaponBuffByName(spellName)
 end
 
 -- Get totems for an element in custom order (if set)
+-- savedOrder now contains spell IDs instead of names
 function addon.GetOrderedTotems(element)
     local savedOrder = TotemDeckDB and TotemDeckDB.totemOrder and TotemDeckDB.totemOrder[element]
     if not savedOrder or #savedOrder == 0 then
         return addon.TOTEMS[element] -- Use default order
     end
 
-    -- Build ordered list from saved names
+    -- Build ordered list from saved spell IDs
     local ordered = {}
-    for _, name in ipairs(savedOrder) do
+    for _, savedID in ipairs(savedOrder) do
         for _, totem in ipairs(addon.TOTEMS[element]) do
-            if totem.name == name then
+            if totem.spellID == savedID then
                 table.insert(ordered, totem)
                 break
             end
@@ -310,8 +370,8 @@ function addon.GetOrderedTotems(element)
     -- Add any totems not in saved order (e.g., newly added)
     for _, totem in ipairs(addon.TOTEMS[element]) do
         local found = false
-        for _, name in ipairs(savedOrder) do
-            if totem.name == name then
+        for _, savedID in ipairs(savedOrder) do
+            if totem.spellID == savedID then
                 found = true
                 break
             end

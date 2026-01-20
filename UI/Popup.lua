@@ -30,8 +30,9 @@ function addon.CreatePopupButton(parent, totemData, element, index)
     local icon = visual:CreateTexture(nil, "ARTWORK")
     icon:SetSize(32, 32)
     icon:SetPoint("CENTER")
-    local spellIcon = GetSpellTexture(totemData.name)
-    icon:SetTexture(spellIcon or totemData.icon)
+    -- Use spell ID for icon lookup (works in all languages)
+    local spellIcon = addon.GetTotemIcon(totemData.spellID)
+    icon:SetTexture(spellIcon)
     icon:Show()
     visual.icon = icon
 
@@ -46,25 +47,24 @@ function addon.CreatePopupButton(parent, totemData, element, index)
     btn.border = visual -- Use visual as border (has SetBackdropBorderColor)
     btn.icon = icon
 
-    -- Store data
-    btn.totemName = totemData.name
+    -- Store data using spell ID
+    btn.spellID = totemData.spellID
+    btn.totemName = addon.GetTotemName(totemData.spellID)  -- Cache localized name
     btn.totemDuration = totemData.duration
     btn.element = element
-    -- Get spell ID for tooltip
-    local _, _, _, _, _, _, spellID = GetSpellInfo(totemData.name)
-    btn.spellID = spellID
 
     -- Register for clicks
     btn:RegisterForClicks("AnyDown", "AnyUp")
 
-    -- Left click = cast
+    -- Left click = cast by name so WoW auto-selects highest trained rank
     btn:SetAttribute("type1", "spell")
-    btn:SetAttribute("spell1", totemData.name)
+    local totemName = addon.GetTotemName(totemData.spellID)
+    btn:SetAttribute("spell1", totemName)
 
-    -- Right click = set active
+    -- Right click = set active (now using spell ID)
     btn:HookScript("PostClick", function(self, button)
         if button == "RightButton" then
-            SetActiveTotem(self.element, self.totemName)
+            SetActiveTotem(self.element, self.spellID)
         end
     end)
 
@@ -81,12 +81,15 @@ function addon.CreatePopupButton(parent, totemData, element, index)
         self.border:SetBackdropBorderColor(1, 1, 1, 1)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         if self.spellID then
-            GameTooltip:SetSpellByID(self.spellID)
+            -- Use highest trained rank for tooltip
+            local trainedID = addon.GetHighestRankSpellID(self.spellID) or self.spellID
+            GameTooltip:SetSpellByID(trainedID)
         else
             GameTooltip:SetText(self.totemName, 1, 1, 1)
         end
+        -- Check if this is the active totem (compare spell IDs)
         local activeKey = "active" .. self.element
-        if TotemDeckDB[activeKey] == self.totemName then
+        if TotemDeckDB[activeKey] == self.spellID then
             GameTooltip:AddLine(" ")
             GameTooltip:AddLine("(Active)", 0, 1, 0)
         end
@@ -97,10 +100,10 @@ function addon.CreatePopupButton(parent, totemData, element, index)
     end)
 
     btn:SetScript("OnLeave", function(self)
-        -- Restore border color based on active state (ShowPopup will have set element colors)
+        -- Restore border color based on active state (compare spell IDs)
         local activeKey = "active" .. self.element
         local color = ELEMENT_COLORS[self.element]
-        if TotemDeckDB[activeKey] == self.totemName then
+        if TotemDeckDB[activeKey] == self.spellID then
             self.border:SetBackdropBorderColor(0, 1, 0, 1)
         else
             self.border:SetBackdropBorderColor(color.r, color.g, color.b, 0.8)
@@ -131,10 +134,10 @@ function addon.ShowPopup(hoveredElement)
         -- Highlight hovered element, dim others
         if elem == hoveredElement then
             container:SetBackdropBorderColor(color.r, color.g, color.b, 1)
-            -- Update active totem highlights for this element
+            -- Update active totem highlights for this element (compare spell IDs)
             local activeKey = "active" .. elem
             for _, btn in ipairs(popupButtons[elem]) do
-                if TotemDeckDB[activeKey] == btn.totemName then
+                if TotemDeckDB[activeKey] == btn.spellID then
                     btn.border:SetBackdropBorderColor(0, 1, 0, 1)
                 else
                     btn.border:SetBackdropBorderColor(color.r, color.g, color.b, 0.8)
@@ -146,7 +149,7 @@ function addon.ShowPopup(hoveredElement)
                 container:SetBackdropBorderColor(color.r, color.g, color.b, 0.5)
                 for _, btn in ipairs(popupButtons[elem]) do
                     local activeKey = "active" .. elem
-                    if TotemDeckDB[activeKey] == btn.totemName then
+                    if TotemDeckDB[activeKey] == btn.spellID then
                         btn.border:SetBackdropBorderColor(0, 0.8, 0, 0.8)
                     else
                         btn.border:SetBackdropBorderColor(color.r * 0.6, color.g * 0.6, color.b * 0.6, 0.6)
@@ -156,7 +159,7 @@ function addon.ShowPopup(hoveredElement)
                 container:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
                 for _, btn in ipairs(popupButtons[elem]) do
                     local activeKey = "active" .. elem
-                    if TotemDeckDB[activeKey] == btn.totemName then
+                    if TotemDeckDB[activeKey] == btn.spellID then
                         btn.border:SetBackdropBorderColor(0, 0.6, 0, 0.8)
                     else
                         btn.border:SetBackdropBorderColor(0.2, 0.2, 0.2, 0.8)
@@ -177,10 +180,10 @@ function addon.HidePopup()
         for elem, container in pairs(popupContainers) do
             local color = ELEMENT_COLORS[elem]
             container:SetBackdropBorderColor(color.r, color.g, color.b, 0.5)
-            -- Dim all buttons
+            -- Dim all buttons (compare spell IDs)
             for _, btn in ipairs(popupButtons[elem] or {}) do
                 local activeKey = "active" .. elem
-                if TotemDeckDB[activeKey] == btn.totemName then
+                if TotemDeckDB[activeKey] == btn.spellID then
                     btn.border:SetBackdropBorderColor(0, 0.8, 0, 0.8)
                 else
                     btn.border:SetBackdropBorderColor(color.r * 0.6, color.g * 0.6, color.b * 0.6, 0.6)
@@ -246,10 +249,10 @@ function addon.CreatePopupColumn(element, anchorButton)
     local direction = TotemDeckDB.popupDirection or "UP"
     local isHorizontal = (direction == "LEFT" or direction == "RIGHT")
 
-    -- Filter to only trained totems that aren't hidden
+    -- Filter to only trained totems that aren't hidden (using spell IDs)
     local totems = {}
     for _, totemData in ipairs(allTotems) do
-        if IsTotemKnown(totemData.name) and not IsTotemHidden(element, totemData.name) then
+        if IsTotemKnown(totemData.spellID) and not IsTotemHidden(element, totemData.spellID) then
             table.insert(totems, totemData)
         end
     end

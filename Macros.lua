@@ -15,17 +15,17 @@ function addon.CreateTotemMacros()
         local macroName = "TD" .. element
         local macroIcon = "INV_Misc_QuestionMark"
 
-        -- Find icon and spell for current active totem
+        -- Find icon and spell for current active totem (using spell ID)
         local activeKey = "active" .. element
-        local totemName = TotemDeckDB[activeKey]
+        local spellID = TotemDeckDB[activeKey]
+        local totemName = addon.GetTotemName(spellID)  -- Get localized name
         local macroBody = "#showtooltip\n/cast " .. (totemName or "")
 
-        if totemName then
-            for _, totem in ipairs(TOTEMS[element]) do
-                if totem.name == totemName then
-                    macroIcon = totem.icon:gsub("Interface\\Icons\\", "")
-                    break
-                end
+        if spellID then
+            -- Get icon from spell ID
+            local icon = addon.GetTotemIcon(spellID)
+            if icon then
+                macroIcon = icon:gsub("Interface\\Icons\\", "")
             end
         end
 
@@ -52,7 +52,8 @@ function addon.CreateTotemMacros()
     local totemList = {}
     for _, element in ipairs(GetElementOrder()) do
         local activeKey = "active" .. element
-        local totemName = TotemDeckDB[activeKey]
+        local spellID = TotemDeckDB[activeKey]
+        local totemName = addon.GetTotemName(spellID)  -- Get localized name
         if totemName then
             table.insert(totemList, totemName)
         end
@@ -77,13 +78,16 @@ function addon.UpdateTotemMacro(element)
     if macroIndex == 0 then return end
 
     local activeKey = "active" .. element
-    local totemName = TotemDeckDB[activeKey]
+    local spellID = TotemDeckDB[activeKey]
+    if not spellID then return end
+
+    local totemName = addon.GetTotemName(spellID)  -- Get localized name
     if not totemName then return end
 
     local macroIcon = "INV_Misc_QuestionMark"
-    local totemData = GetTotemData(totemName)
-    if totemData then
-        macroIcon = totemData.icon:gsub("Interface\\Icons\\", "")
+    local icon = addon.GetTotemIcon(spellID)
+    if icon then
+        macroIcon = icon:gsub("Interface\\Icons\\", "")
     end
 
     EditMacro(macroIndex, macroName, macroIcon, "#showtooltip\n/cast " .. totemName)
@@ -94,7 +98,8 @@ function addon.UpdateTotemMacro(element)
         local totemList = {}
         for _, elem in ipairs(GetElementOrder()) do
             local ak = "active" .. elem
-            local tn = TotemDeckDB[ak]
+            local sid = TotemDeckDB[ak]
+            local tn = addon.GetTotemName(sid)  -- Get localized name
             if tn then
                 table.insert(totemList, tn)
             end
@@ -104,17 +109,17 @@ function addon.UpdateTotemMacro(element)
     end
 end
 
--- Set active totem for an element
-function addon.SetActiveTotem(element, totemName)
+-- Set active totem for an element (now takes spell ID instead of name)
+function addon.SetActiveTotem(element, spellID)
     local activeKey = "active" .. element
-    TotemDeckDB[activeKey] = totemName
+    TotemDeckDB[activeKey] = spellID
 
     -- Update popup buttons immediately (visual only, not protected)
     local popupButtons = addon.UI.popupButtons
     local ELEMENT_COLORS = addon.ELEMENT_COLORS
     if popupButtons[element] then
         for _, btn in ipairs(popupButtons[element]) do
-            if btn.totemName == totemName then
+            if btn.spellID == spellID then
                 btn.border:SetBackdropBorderColor(0, 1, 0, 1)
             else
                 btn.border:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
