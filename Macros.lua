@@ -22,10 +22,10 @@ function addon.CreateTotemMacros()
         local macroBody = "#showtooltip\n/cast " .. (totemName or "")
 
         if spellID then
-            -- Get icon from spell ID
+            -- Get icon from spell ID (returns texture ID number in modern WoW)
             local icon = addon.GetTotemIcon(spellID)
             if icon then
-                macroIcon = icon:gsub("Interface\\Icons\\", "")
+                macroIcon = icon
             end
         end
 
@@ -87,10 +87,12 @@ function addon.UpdateTotemMacro(element)
     local macroIcon = "INV_Misc_QuestionMark"
     local icon = addon.GetTotemIcon(spellID)
     if icon then
-        macroIcon = icon:gsub("Interface\\Icons\\", "")
+        -- GetSpellTexture returns a number (texture ID) in modern WoW
+        macroIcon = icon
     end
 
-    EditMacro(macroIndex, macroName, macroIcon, "#showtooltip\n/cast " .. totemName)
+    local macroBody = "#showtooltip\n/cast " .. totemName
+    EditMacro(macroIndex, macroName, macroIcon, macroBody)
 
     -- Also update the sequence macro
     local sequenceIndex = GetMacroIndexByName("TDAll")
