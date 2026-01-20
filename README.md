@@ -11,11 +11,13 @@ A lightweight shaman totem management addon for WoW Classic. Streamlined totem b
 - **Shift+Right-click** to recall all totems (Totemic Call)
 - **Custom ordering** for both elements and individual totems
 - **Hide unused totems** from the popup
+- **Popup modifier key** - Optionally require Shift/Ctrl/Alt to show popups (prevents accidental clicks)
+- **Dim out of range** - Icons dim when you move out of range of buff-providing totems (Windfury, Strength of Earth, Stoneskin, Mana Spring, resistance totems, etc.)
 
 ### Timers
-- **Bar style** - Traditional timer bars above/below/beside the bar
-- **Icon style** - Compact countdown text under each button
-- **Placed totem indicator** - Shows when placed totem differs from active selection
+- **Bar style** - Traditional timer bars positioned above/below/left/right of the bar
+- **Icon style** - Compact countdown text positioned above/below/left/right of each button
+- **Placed totem indicator** - Shows when placed totem differs from active selection (desaturated icon)
 
 ### Reincarnation Tracker
 - Small button showing Reincarnation with Ankh count overlay
@@ -58,11 +60,16 @@ Creates 5 macros for your action bars:
 | Popup Direction | Up / Down / Left / Right |
 | Timer Position | Above / Below / Left / Right |
 | Timer Style | Bars / Icons |
+| Popup Modifier | None / Shift / Ctrl / Alt |
 | Show Timers | On / Off |
 | Lock Position | On / Off |
 | Always Show Popup | On / Off |
+| Dim Out of Range | On / Off |
 | Show Reincarnation | On / Off |
 | Show Weapon Buffs | On / Off |
+
+### Combat Note
+In combat, Blizzard restricts hiding UI frames. Popup bars become invisible but remain clickable in their last position. Enable **Always Show Popup** to avoid accidental clicks during combat.
 
 ## Commands
 
