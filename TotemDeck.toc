@@ -3,7 +3,7 @@
 ## Title: TotemDeck
 ## Notes: Streamlined totem management with one-click casting, hover popups, weapon buff buttons, and Ankh tracking—all in a minimal, moveable bar.
 ## Author: Player
-## Version: 1.2.2
+## Version: 1.2.6
 ## SavedVariables: TotemDeckDB
 
 Core.lua
