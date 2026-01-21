@@ -148,6 +148,22 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
             end
         end
 
+        -- Ensure customMacros exists
+        if not TotemDeckDB.customMacros then
+            TotemDeckDB.customMacros = {}
+        end
+
+        -- Ensure defaultMacrosEnabled has all keys
+        if not TotemDeckDB.defaultMacrosEnabled then
+            TotemDeckDB.defaultMacrosEnabled = {}
+        end
+        local defaultMacroNames = { "TDEarth", "TDFire", "TDWater", "TDAir", "TDAll" }
+        for _, macroName in ipairs(defaultMacroNames) do
+            if TotemDeckDB.defaultMacrosEnabled[macroName] == nil then
+                TotemDeckDB.defaultMacrosEnabled[macroName] = true
+            end
+        end
+
     elseif event == "PLAYER_LOGIN" then
         if not IsShaman() then
             return
@@ -191,6 +207,8 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
             addon.UpdateTotemMacro(element)
         end
         addon.state.pendingActiveUpdates = {}
+        -- Also update custom macros (in case active totems changed during combat)
+        addon.UpdateCustomMacros()
 
     elseif event == "BAG_UPDATE" then
         -- Update Ankh count for Reincarnation button

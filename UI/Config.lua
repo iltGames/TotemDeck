@@ -297,6 +297,9 @@ function addon.CreateConfigWindow()
     closeBtn:SetPoint("TOPRIGHT", -2, -2)
     closeBtn:SetScript("OnClick", function() frame:Hide() end)
 
+    -- Enable Escape key to close (UISpecialFrames handles this automatically)
+    tinsert(UISpecialFrames, "TotemDeckConfigWindow")
+
     -- Tab system
     local tabs = {}
     local tabContent = {}
@@ -340,6 +343,7 @@ function addon.CreateConfigWindow()
 
     CreateTab("layout", "Layout", 15)
     CreateTab("ordering", "Totem Order", 120)
+    CreateTab("macros", "Macros", 225)
 
     local contentFrame = CreateFrame("Frame", nil, frame)
     contentFrame:SetPoint("TOPLEFT", 15, -65)
@@ -377,7 +381,7 @@ function addon.CreateConfigWindow()
     end
 
     -- Settings row with dropdowns
-    local settingsSection = CreateLayoutSection(layoutContent, "Settings", 0, 60)
+    local settingsSection = CreateLayoutSection(layoutContent, "Settings", 0, 100)
 
     frame.popupDirDropdown = CreateDropdown(settingsSection, "Popup Direction", {
         { label = "Up", value = "UP" },
@@ -416,16 +420,57 @@ function addon.CreateConfigWindow()
         TotemDeckDB.popupModifier = value
     end)
 
+    -- Scale slider
+    local scaleContainer = CreateFrame("Frame", nil, settingsSection, "BackdropTemplate")
+    scaleContainer:SetSize(200, 40)
+    scaleContainer:SetPoint("TOPLEFT", settingsSection, "TOPLEFT", 10, -58)
+    scaleContainer:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    scaleContainer:SetBackdropColor(0.08, 0.08, 0.08, 0.8)
+    scaleContainer:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+
+    local scaleLabel = scaleContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    scaleLabel:SetPoint("TOPLEFT", 4, -2)
+    scaleLabel:SetText("Scale")
+    scaleLabel:SetTextColor(1, 0.82, 0)
+
+    local scaleSlider = CreateFrame("Slider", nil, scaleContainer, "OptionsSliderTemplate")
+    scaleSlider:SetSize(150, 16)
+    scaleSlider:SetPoint("TOPLEFT", 4, -16)
+    scaleSlider:SetMinMaxValues(0.5, 1.5)
+    scaleSlider:SetValueStep(0.05)
+    scaleSlider:SetObeyStepOnDrag(true)
+    scaleSlider:SetValue(TotemDeckDB.barScale or 1.0)
+    scaleSlider.Low:SetText("50%")
+    scaleSlider.High:SetText("150%")
+
+    local scaleValueText = scaleContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    scaleValueText:SetPoint("LEFT", scaleSlider, "RIGHT", 10, 0)
+    scaleValueText:SetText(string.format("%d%%", (TotemDeckDB.barScale or 1.0) * 100))
+
+    scaleSlider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value * 20 + 0.5) / 20 -- Round to nearest 0.05
+        TotemDeckDB.barScale = value
+        scaleValueText:SetText(string.format("%d%%", value * 100))
+        if addon.UI.actionBarFrame then
+            addon.UI.actionBarFrame:SetScale(value)
+        end
+    end)
+    frame.scaleSlider = scaleSlider
+
     -- Combat warning note
     local warningText = layoutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    warningText:SetPoint("TOPLEFT", layoutContent, "TOPLEFT", 10, -68)
+    warningText:SetPoint("TOPLEFT", layoutContent, "TOPLEFT", 10, -108)
     warningText:SetWidth(500)
     warningText:SetJustifyH("LEFT")
     warningText:SetText("|cFFFFAA00Note:|r In combat, popup bars are invisible but still clickable (Blizzard blocks hiding frames). Enable 'Always Show Popup' to avoid accidental clicks.")
     warningText:SetTextColor(0.7, 0.7, 0.7)
 
     -- Options (full width, 2-column layout for checkboxes)
-    local optionsSection = CreateLayoutSection(layoutContent, "Options", -90, 155)
+    local optionsSection = CreateLayoutSection(layoutContent, "Options", -130, 155)
 
     -- Left column
     local showTimersCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
@@ -564,15 +609,6 @@ function addon.CreateConfigWindow()
     showWeaponLabel:SetPoint("LEFT", showWeaponCheck, "RIGHT", 4, 0)
     showWeaponLabel:SetText("Show Weapon Buffs")
     frame.showWeaponCheck = showWeaponCheck
-
-    local macrosBtn = CreateFrame("Button", nil, optionsSection, "UIPanelButtonTemplate")
-    macrosBtn:SetSize(120, 22)
-    macrosBtn:SetPoint("TOPLEFT", 260, -76)
-    macrosBtn:SetText("Recreate Macros")
-    macrosBtn:SetScript("OnClick", function()
-        addon.CreateTotemMacros()
-        print("|cFF00FF00TotemDeck:|r Macros recreated")
-    end)
 
     --------------------------
     -- ORDERING TAB
@@ -727,6 +763,368 @@ function addon.CreateConfigWindow()
         print("|cFF00FF00TotemDeck:|r Order applied")
     end)
 
+    --------------------------
+    -- MACROS TAB
+    --------------------------
+    local macrosContent = CreateFrame("Frame", nil, contentFrame)
+    macrosContent:SetAllPoints()
+    tabContent["macros"] = macrosContent
+
+    -- Default Macros Section
+    local defaultMacrosSection = CreateFrame("Frame", nil, macrosContent, "BackdropTemplate")
+    defaultMacrosSection:SetSize(520, 100)
+    defaultMacrosSection:SetPoint("TOP", macrosContent, "TOP", 0, 0)
+    defaultMacrosSection:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    defaultMacrosSection:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
+    defaultMacrosSection:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+
+    local defaultMacrosLabel = defaultMacrosSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    defaultMacrosLabel:SetPoint("TOPLEFT", 10, -8)
+    defaultMacrosLabel:SetText("Default Macros")
+    defaultMacrosLabel:SetTextColor(1, 0.82, 0)
+
+    local defaultMacroCheckboxes = {}
+    local defaultMacroInfo = {
+        { name = "TDEarth", desc = "Earth" },
+        { name = "TDFire", desc = "Fire" },
+        { name = "TDWater", desc = "Water" },
+        { name = "TDAir", desc = "Air" },
+        { name = "TDAll", desc = "All sequence" },
+    }
+
+    for i, info in ipairs(defaultMacroInfo) do
+        local col = (i - 1) % 3
+        local row = math.floor((i - 1) / 3)
+
+        local check = CreateFrame("CheckButton", nil, defaultMacrosSection, "UICheckButtonTemplate")
+        check:SetPoint("TOPLEFT", 10 + col * 170, -28 - row * 24)
+
+        local enabled = true
+        if TotemDeckDB.defaultMacrosEnabled and TotemDeckDB.defaultMacrosEnabled[info.name] ~= nil then
+            enabled = TotemDeckDB.defaultMacrosEnabled[info.name]
+        end
+        check:SetChecked(enabled)
+
+        check:SetScript("OnClick", function(self)
+            addon.SetDefaultMacroEnabled(info.name, self:GetChecked())
+        end)
+
+        local label = defaultMacrosSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        label:SetPoint("LEFT", check, "RIGHT", 2, 0)
+        label:SetText(info.name .. " - " .. info.desc)
+
+        defaultMacroCheckboxes[info.name] = check
+    end
+    frame.defaultMacroCheckboxes = defaultMacroCheckboxes
+
+    local macrosBtn = CreateFrame("Button", nil, defaultMacrosSection, "UIPanelButtonTemplate")
+    macrosBtn:SetSize(120, 22)
+    macrosBtn:SetPoint("TOPLEFT", 10, -76)
+    macrosBtn:SetText("Recreate Macros")
+    macrosBtn:SetScript("OnClick", function()
+        addon.CreateTotemMacros()
+        print("|cFF00FF00TotemDeck:|r Macros recreated")
+    end)
+
+    -- Custom Macros Section
+    local customMacrosSection = CreateFrame("Frame", nil, macrosContent, "BackdropTemplate")
+    customMacrosSection:SetSize(520, 190)
+    customMacrosSection:SetPoint("TOP", defaultMacrosSection, "BOTTOM", 0, -10)
+    customMacrosSection:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    customMacrosSection:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
+    customMacrosSection:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+
+    local customMacrosLabel = customMacrosSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    customMacrosLabel:SetPoint("TOPLEFT", 10, -8)
+    customMacrosLabel:SetText("Custom Macros")
+    customMacrosLabel:SetTextColor(1, 0.82, 0)
+
+    -- Custom macro list (scrollable)
+    local customListScroll = CreateFrame("ScrollFrame", nil, customMacrosSection, "UIPanelScrollFrameTemplate")
+    customListScroll:SetPoint("TOPLEFT", 10, -28)
+    customListScroll:SetSize(110, 130)
+
+    local customListChild = CreateFrame("Frame", nil, customListScroll)
+    customListChild:SetSize(85, 200)
+    customListScroll:SetScrollChild(customListChild)
+
+    local customMacroButtons = {}
+    local selectedCustomMacro = nil
+
+    local function RefreshCustomMacroList()
+        for _, btn in ipairs(customMacroButtons) do
+            btn:Hide()
+        end
+        customMacroButtons = {}
+
+        if not TotemDeckDB.customMacros then return end
+
+        for i, macro in ipairs(TotemDeckDB.customMacros) do
+            local btn = CreateFrame("Button", nil, customListChild)
+            btn:SetSize(80, 20)
+            btn:SetPoint("TOPLEFT", 0, -((i - 1) * 22))
+            btn:SetHighlightTexture("Interface\\Buttons\\WHITE8x8")
+            btn:GetHighlightTexture():SetVertexColor(0.3, 0.3, 0.5, 0.5)
+
+            local btnBg = btn:CreateTexture(nil, "BACKGROUND")
+            btnBg:SetAllPoints()
+            btnBg:SetColorTexture(0.15, 0.15, 0.15, 0.8)
+            btn.bg = btnBg
+
+            local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            btnText:SetPoint("LEFT", 4, 0)
+            btnText:SetText((macro.enabled and "" or "|cFF888888") .. macro.name .. (macro.enabled and "" or "|r"))
+            btn.text = btnText
+
+            btn.macroIndex = i
+            btn:SetScript("OnClick", function(self)
+                selectedCustomMacro = self.macroIndex
+                -- Update selection highlight
+                for _, b in ipairs(customMacroButtons) do
+                    if b.macroIndex == selectedCustomMacro then
+                        b.bg:SetColorTexture(0.2, 0.3, 0.4, 1)
+                    else
+                        b.bg:SetColorTexture(0.15, 0.15, 0.15, 0.8)
+                    end
+                end
+                -- Load into editor
+                local m = TotemDeckDB.customMacros[selectedCustomMacro]
+                if m then
+                    frame.macroNameEditBox:SetText(m.name or "")
+                    frame.macroTemplateEditBox:SetText(m.template or "")
+                    frame.macroEnabledCheck:SetChecked(m.enabled)
+                end
+            end)
+
+            customMacroButtons[i] = btn
+        end
+    end
+
+    -- Editor panel (positioned absolutely so it doesn't move with list width)
+    local editorPanel = CreateFrame("Frame", nil, customMacrosSection)
+    editorPanel:SetPoint("TOPLEFT", customMacrosSection, "TOPLEFT", 160, -28)
+    editorPanel:SetSize(350, 140)
+
+    -- Name input
+    local nameLabel = editorPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    nameLabel:SetPoint("TOPLEFT", 0, 0)
+    nameLabel:SetText("Name:")
+    nameLabel:SetTextColor(0.8, 0.8, 0.8)
+
+    local nameEditBox = CreateFrame("EditBox", nil, editorPanel, "BackdropTemplate")
+    nameEditBox:SetSize(100, 18)
+    nameEditBox:SetPoint("LEFT", nameLabel, "RIGHT", 5, 0)
+    nameEditBox:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    nameEditBox:SetBackdropColor(0.1, 0.1, 0.1, 1)
+    nameEditBox:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+    nameEditBox:SetFontObject("GameFontNormalSmall")
+    nameEditBox:SetAutoFocus(false)
+    nameEditBox:SetMaxLetters(16)
+    nameEditBox:SetTextInsets(4, 4, 0, 0)
+    frame.macroNameEditBox = nameEditBox
+
+    -- Enabled checkbox
+    local enabledCheck = CreateFrame("CheckButton", nil, editorPanel, "UICheckButtonTemplate")
+    enabledCheck:SetPoint("LEFT", nameEditBox, "RIGHT", 10, 0)
+    enabledCheck:SetChecked(true)
+    enabledCheck:SetSize(20, 20)
+    frame.macroEnabledCheck = enabledCheck
+
+    local enabledLabel = editorPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    enabledLabel:SetPoint("LEFT", enabledCheck, "RIGHT", 0, 0)
+    enabledLabel:SetText("Enabled")
+
+    -- Template input
+    local templateLabel = editorPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    templateLabel:SetPoint("TOPLEFT", 0, -24)
+    templateLabel:SetText("Template:")
+    templateLabel:SetTextColor(0.8, 0.8, 0.8)
+
+    local templateScroll = CreateFrame("ScrollFrame", nil, editorPanel, "UIPanelScrollFrameTemplate")
+    templateScroll:SetPoint("TOPLEFT", 0, -40)
+    templateScroll:SetSize(340, 42)
+
+    local templateEditBox = CreateFrame("EditBox", nil, templateScroll, "BackdropTemplate")
+    templateEditBox:SetSize(320, 100)
+    templateEditBox:SetMultiLine(true)
+    templateEditBox:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    templateEditBox:SetBackdropColor(0.1, 0.1, 0.1, 1)
+    templateEditBox:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+    templateEditBox:SetFontObject("GameFontNormalSmall")
+    templateEditBox:SetAutoFocus(false)
+    templateEditBox:SetMaxLetters(255)
+    templateEditBox:SetTextInsets(4, 4, 4, 4)
+    templateScroll:SetScrollChild(templateEditBox)
+    frame.macroTemplateEditBox = templateEditBox
+
+    -- Placeholder insert buttons
+    local placeholderLabel = editorPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    placeholderLabel:SetPoint("TOPLEFT", templateScroll, "BOTTOMLEFT", 0, -6)
+    placeholderLabel:SetText("Insert:")
+    placeholderLabel:SetTextColor(0.6, 0.6, 0.6)
+
+    local placeholderButtons = {}
+    local placeholders = {
+        { name = "{earth}", color = ELEMENT_COLORS["Earth"] },
+        { name = "{fire}", color = ELEMENT_COLORS["Fire"] },
+        { name = "{water}", color = ELEMENT_COLORS["Water"] },
+        { name = "{air}", color = ELEMENT_COLORS["Air"] },
+    }
+
+    for i, placeholder in ipairs(placeholders) do
+        local btn = CreateFrame("Button", nil, editorPanel, "UIPanelButtonTemplate")
+        btn:SetSize(52, 18)
+        if i == 1 then
+            btn:SetPoint("LEFT", placeholderLabel, "RIGHT", 5, 0)
+        else
+            btn:SetPoint("LEFT", placeholderButtons[i-1], "RIGHT", 3, 0)
+        end
+        btn:SetText(placeholder.name)
+        btn:GetFontString():SetTextColor(placeholder.color.r, placeholder.color.g, placeholder.color.b)
+        btn:SetScript("OnClick", function()
+            local cursorPos = templateEditBox:GetCursorPosition()
+            local text = templateEditBox:GetText()
+            local before = text:sub(1, cursorPos)
+            local after = text:sub(cursorPos + 1)
+            templateEditBox:SetText(before .. placeholder.name .. after)
+            templateEditBox:SetCursorPosition(cursorPos + #placeholder.name)
+            templateEditBox:SetFocus()
+        end)
+        placeholderButtons[i] = btn
+    end
+
+    -- Buttons
+    local addNewBtn = CreateFrame("Button", nil, customMacrosSection, "UIPanelButtonTemplate")
+    addNewBtn:SetSize(50, 18)
+    addNewBtn:SetPoint("LEFT", customMacrosLabel, "RIGHT", 10, 0)
+    addNewBtn:SetText("+ New")
+    addNewBtn:SetScript("OnClick", function()
+        selectedCustomMacro = nil
+        nameEditBox:SetText("")
+        templateEditBox:SetText("#showtooltip\n/cast ")
+        enabledCheck:SetChecked(true)
+        -- Clear selection highlight
+        for _, b in ipairs(customMacroButtons) do
+            b.bg:SetColorTexture(0.15, 0.15, 0.15, 0.8)
+        end
+    end)
+
+    local saveBtn = CreateFrame("Button", nil, editorPanel, "UIPanelButtonTemplate")
+    saveBtn:SetSize(60, 20)
+    saveBtn:SetPoint("TOPLEFT", placeholderLabel, "BOTTOMLEFT", 0, -8)
+    saveBtn:SetText("Save")
+    saveBtn:SetScript("OnClick", function()
+        local name = nameEditBox:GetText():gsub("^%s*(.-)%s*$", "%1") -- trim
+        local template = templateEditBox:GetText()
+        local enabled = enabledCheck:GetChecked()
+
+        if name == "" then
+            print("|cFFFF0000TotemDeck:|r Macro name is required")
+            return
+        end
+
+        if not TotemDeckDB.customMacros then
+            TotemDeckDB.customMacros = {}
+        end
+
+        if selectedCustomMacro then
+            -- Update existing
+            local oldName = TotemDeckDB.customMacros[selectedCustomMacro].name
+            if oldName ~= name then
+                -- Name changed, delete old macro
+                addon.DeleteCustomMacro(oldName)
+            end
+            TotemDeckDB.customMacros[selectedCustomMacro] = {
+                name = name,
+                template = template,
+                enabled = enabled,
+            }
+        else
+            -- Check for duplicate name
+            for _, m in ipairs(TotemDeckDB.customMacros) do
+                if m.name == name then
+                    print("|cFFFF0000TotemDeck:|r A macro with that name already exists")
+                    return
+                end
+            end
+            -- Add new
+            table.insert(TotemDeckDB.customMacros, {
+                name = name,
+                template = template,
+                enabled = enabled,
+            })
+            selectedCustomMacro = #TotemDeckDB.customMacros
+        end
+
+        addon.UpdateCustomMacros()
+        RefreshCustomMacroList()
+        print("|cFF00FF00TotemDeck:|r Macro saved")
+    end)
+
+    local previewBtn = CreateFrame("Button", nil, editorPanel, "UIPanelButtonTemplate")
+    previewBtn:SetSize(60, 20)
+    previewBtn:SetPoint("LEFT", saveBtn, "RIGHT", 5, 0)
+    previewBtn:SetText("Preview")
+    previewBtn:SetScript("OnClick", function()
+        local template = templateEditBox:GetText()
+        local expanded = addon.ProcessMacroTemplate(template)
+        print("|cFF00FF00TotemDeck Preview:|r")
+        for line in expanded:gmatch("[^\n]+") do
+            print("  " .. line)
+        end
+    end)
+
+    local deleteBtn = CreateFrame("Button", nil, editorPanel, "UIPanelButtonTemplate")
+    deleteBtn:SetSize(60, 20)
+    deleteBtn:SetPoint("LEFT", previewBtn, "RIGHT", 5, 0)
+    deleteBtn:SetText("Delete")
+    deleteBtn:SetScript("OnClick", function()
+        if not selectedCustomMacro then
+            print("|cFFFF0000TotemDeck:|r No macro selected")
+            return
+        end
+
+        local macro = TotemDeckDB.customMacros[selectedCustomMacro]
+        if macro then
+            addon.DeleteCustomMacro(macro.name)
+            table.remove(TotemDeckDB.customMacros, selectedCustomMacro)
+        end
+
+        selectedCustomMacro = nil
+        nameEditBox:SetText("")
+        templateEditBox:SetText("")
+        enabledCheck:SetChecked(true)
+        RefreshCustomMacroList()
+        print("|cFF00FF00TotemDeck:|r Macro deleted")
+    end)
+
+    -- Example macro
+    local exampleLabel = customMacrosSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    exampleLabel:SetPoint("BOTTOMLEFT", customMacrosSection, "BOTTOMLEFT", 10, 8)
+    exampleLabel:SetPoint("RIGHT", customMacrosSection, "RIGHT", -10, 0)
+    exampleLabel:SetJustifyH("LEFT")
+    exampleLabel:SetText("|cFF888888Example:|r  /castsequence reset=combat {earth}, {fire}, {water}, {air}")
+    exampleLabel:SetTextColor(0.6, 0.6, 0.6)
+
+    -- Store refresh function for later use
+    frame.RefreshCustomMacroList = RefreshCustomMacroList
+
     frame.sections = sections
     frame.tabContent = tabContent
     frame:Hide()
@@ -768,6 +1166,19 @@ local function RefreshConfigWindowState()
     if configWindow.showWeaponCheck then
         configWindow.showWeaponCheck:SetChecked(TotemDeckDB.showWeaponBuffs)
     end
+    if configWindow.scaleSlider then
+        configWindow.scaleSlider:SetValue(TotemDeckDB.barScale or 1.0)
+    end
+    -- Refresh default macro checkboxes
+    if configWindow.defaultMacroCheckboxes then
+        for name, check in pairs(configWindow.defaultMacroCheckboxes) do
+            local enabled = true
+            if TotemDeckDB.defaultMacrosEnabled and TotemDeckDB.defaultMacrosEnabled[name] ~= nil then
+                enabled = TotemDeckDB.defaultMacrosEnabled[name]
+            end
+            check:SetChecked(enabled)
+        end
+    end
 end
 
 function addon.ToggleConfigWindow()
@@ -779,6 +1190,10 @@ function addon.ToggleConfigWindow()
         RefreshConfigWindowState()
         for element, section in pairs(frame.sections) do
             PopulateConfigSection(section.scrollChild, element)
+        end
+        -- Refresh custom macro list
+        if frame.RefreshCustomMacroList then
+            frame.RefreshCustomMacroList()
         end
         frame:Show()
     end

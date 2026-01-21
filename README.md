@@ -32,7 +32,7 @@ A lightweight shaman totem management addon for WoW Classic. Streamlined totem b
 - Icon updates to show currently active buff with remaining duration
 
 ### Macros
-Creates 5 macros for your action bars:
+Creates 5 macros for your action bars or create your own custom macro:
 
 | Macro | Description |
 |-------|-------------|

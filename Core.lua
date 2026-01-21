@@ -37,6 +37,15 @@ addon.defaults = {
     dimOutOfRange = true, -- Dim totem icons when player is out of range
     popupModifier = "NONE", -- Modifier key required to show popup (NONE, SHIFT, CTRL, ALT)
     greyOutPlacedTotem = true, -- Grey out icon when placed totem differs from active
+    barScale = 1.0, -- Scale factor for the action bar
+    customMacros = {}, -- User-defined macros with template placeholders
+    defaultMacrosEnabled = { -- Toggle default macros on/off
+        TDEarth = true,
+        TDFire = true,
+        TDWater = true,
+        TDAir = true,
+        TDAll = true,
+    },
 }
 
 -- Totem data: spellID (universal across all languages), duration in seconds
@@ -419,4 +428,33 @@ function addon.FormatTime(seconds)
     else
         return string.format("%d", seconds)
     end
+end
+
+-- Process a macro template, replacing placeholders with active totem names
+-- Placeholders: {earth}, {fire}, {water}, {air}
+function addon.ProcessMacroTemplate(template)
+    if not template then return "" end
+
+    local result = template
+
+    -- Get active totem names for each element
+    local replacements = {
+        ["{earth}"] = addon.GetTotemName(TotemDeckDB.activeEarth) or "",
+        ["{fire}"] = addon.GetTotemName(TotemDeckDB.activeFire) or "",
+        ["{water}"] = addon.GetTotemName(TotemDeckDB.activeWater) or "",
+        ["{air}"] = addon.GetTotemName(TotemDeckDB.activeAir) or "",
+    }
+
+    -- Also support uppercase variants
+    replacements["{Earth}"] = replacements["{earth}"]
+    replacements["{Fire}"] = replacements["{fire}"]
+    replacements["{Water}"] = replacements["{water}"]
+    replacements["{Air}"] = replacements["{air}"]
+
+    -- Replace all placeholders
+    for placeholder, totemName in pairs(replacements) do
+        result = result:gsub(placeholder:gsub("[{}]", "%%%1"), totemName)
+    end
+
+    return result
 end

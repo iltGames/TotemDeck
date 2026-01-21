@@ -68,6 +68,9 @@ function addon.CreateActionBarFrame()
 
     addon.UI.actionBarFrame = actionBarFrame
 
+    -- Apply scale from saved settings
+    actionBarFrame:SetScale(TotemDeckDB.barScale or 1.0)
+
     -- Create 4 active totem buttons
     for i, element in ipairs(GetElementOrder()) do
         local activeKey = "active" .. element
