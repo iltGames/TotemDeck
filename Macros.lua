@@ -110,28 +110,28 @@ end
 function addon.UpdateTotemMacro(element)
     local macroName = "TD" .. element
 
-    -- Skip if macro is disabled
-    if not IsDefaultMacroEnabled(macroName) then return end
+    -- Update default macro if enabled
+    if IsDefaultMacroEnabled(macroName) then
+        local macroIndex = GetMacroIndexByName(macroName)
+        if macroIndex > 0 then
+            local activeKey = "active" .. element
+            local spellID = TotemDeckDB[activeKey]
+            if spellID then
+                local totemName = addon.GetTotemName(spellID)  -- Get localized name
+                if totemName then
+                    local macroIcon = "INV_Misc_QuestionMark"
+                    local icon = addon.GetTotemIcon(spellID)
+                    if icon then
+                        -- GetSpellTexture returns a number (texture ID) in modern WoW
+                        macroIcon = icon
+                    end
 
-    local macroIndex = GetMacroIndexByName(macroName)
-    if macroIndex == 0 then return end
-
-    local activeKey = "active" .. element
-    local spellID = TotemDeckDB[activeKey]
-    if not spellID then return end
-
-    local totemName = addon.GetTotemName(spellID)  -- Get localized name
-    if not totemName then return end
-
-    local macroIcon = "INV_Misc_QuestionMark"
-    local icon = addon.GetTotemIcon(spellID)
-    if icon then
-        -- GetSpellTexture returns a number (texture ID) in modern WoW
-        macroIcon = icon
+                    local macroBody = "#showtooltip\n/cast " .. totemName
+                    EditMacro(macroIndex, macroName, macroIcon, macroBody)
+                end
+            end
+        end
     end
-
-    local macroBody = "#showtooltip\n/cast " .. totemName
-    EditMacro(macroIndex, macroName, macroIcon, macroBody)
 
     -- Also update the sequence macro (if enabled)
     if IsDefaultMacroEnabled("TDAll") then
@@ -151,7 +151,7 @@ function addon.UpdateTotemMacro(element)
         end
     end
 
-    -- Also update custom macros
+    -- Always update custom macros (regardless of default macro settings)
     addon.UpdateCustomMacros()
 end
 
