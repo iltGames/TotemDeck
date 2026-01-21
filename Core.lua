@@ -36,6 +36,7 @@ addon.defaults = {
     showWeaponBuffs = true, -- Show Weapon Buffs button
     dimOutOfRange = true, -- Dim totem icons when player is out of range
     popupModifier = "NONE", -- Modifier key required to show popup (NONE, SHIFT, CTRL, ALT)
+    greyOutPlacedTotem = true, -- Grey out icon when placed totem differs from active
 }
 
 -- Totem data: spellID (universal across all languages), duration in seconds

@@ -167,8 +167,11 @@ function addon.UpdateTimers()
                             local placedIcon = GetSpellTexture(baseTotemName) or GetSpellTexture(totemName)
                             if placedIcon then
                                 btn.icon:SetTexture(placedIcon)
-                                btn.icon:SetDesaturated(true)
-                                btn.border:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+                                -- Only grey out if setting is enabled
+                                if TotemDeckDB.greyOutPlacedTotem then
+                                    btn.icon:SetDesaturated(true)
+                                    btn.border:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+                                end
                                 btn.showingPlaced = true
                                 btn.placedTotemName = totemName
                                 -- Try to get spell ID for the placed totem for tooltip

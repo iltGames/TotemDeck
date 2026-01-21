@@ -425,7 +425,7 @@ function addon.CreateConfigWindow()
     warningText:SetTextColor(0.7, 0.7, 0.7)
 
     -- Options (full width, 2-column layout for checkboxes)
-    local optionsSection = CreateLayoutSection(layoutContent, "Options", -90, 130)
+    local optionsSection = CreateLayoutSection(layoutContent, "Options", -90, 155)
 
     -- Left column
     local showTimersCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
@@ -489,7 +489,48 @@ function addon.CreateConfigWindow()
     local dimRangeLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     dimRangeLabel:SetPoint("LEFT", dimRangeCheck, "RIGHT", 4, 0)
     dimRangeLabel:SetText("Dim out of range")
+    -- Example icons showing the effect
+    local dimExampleIcon1 = optionsSection:CreateTexture(nil, "ARTWORK")
+    dimExampleIcon1:SetSize(18, 18)
+    dimExampleIcon1:SetPoint("LEFT", dimRangeLabel, "RIGHT", 8, 0)
+    dimExampleIcon1:SetTexture(136102) -- Earthbind Totem icon
+    dimExampleIcon1:SetAlpha(0.4)
+    local dimArrowLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    dimArrowLabel:SetPoint("LEFT", dimExampleIcon1, "RIGHT", 4, 0)
+    dimArrowLabel:SetText("vs")
+    dimArrowLabel:SetTextColor(0.6, 0.6, 0.6)
+    local dimExampleIcon2 = optionsSection:CreateTexture(nil, "ARTWORK")
+    dimExampleIcon2:SetSize(18, 18)
+    dimExampleIcon2:SetPoint("LEFT", dimArrowLabel, "RIGHT", 4, 0)
+    dimExampleIcon2:SetTexture(136102) -- Earthbind Totem icon
+    dimExampleIcon2:SetAlpha(1.0)
     frame.dimRangeCheck = dimRangeCheck
+
+    local greyPlacedCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
+    greyPlacedCheck:SetPoint("TOPLEFT", 10, -124)
+    greyPlacedCheck:SetChecked(TotemDeckDB.greyOutPlacedTotem)
+    greyPlacedCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.greyOutPlacedTotem = self:GetChecked()
+    end)
+    local greyPlacedLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    greyPlacedLabel:SetPoint("LEFT", greyPlacedCheck, "RIGHT", 4, 0)
+    greyPlacedLabel:SetText("Grey out non-active totem")
+    -- Example icons showing the effect
+    local exampleIcon1 = optionsSection:CreateTexture(nil, "ARTWORK")
+    exampleIcon1:SetSize(18, 18)
+    exampleIcon1:SetPoint("LEFT", greyPlacedLabel, "RIGHT", 8, 0)
+    exampleIcon1:SetTexture(136102) -- Earthbind Totem icon
+    exampleIcon1:SetDesaturated(true)
+    local arrowLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    arrowLabel:SetPoint("LEFT", exampleIcon1, "RIGHT", 4, 0)
+    arrowLabel:SetText("vs")
+    arrowLabel:SetTextColor(0.6, 0.6, 0.6)
+    local exampleIcon2 = optionsSection:CreateTexture(nil, "ARTWORK")
+    exampleIcon2:SetSize(18, 18)
+    exampleIcon2:SetPoint("LEFT", arrowLabel, "RIGHT", 4, 0)
+    exampleIcon2:SetTexture(136102) -- Earthbind Totem icon
+    exampleIcon2:SetDesaturated(false)
+    frame.greyPlacedCheck = greyPlacedCheck
 
     -- Right column
     local showReincCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
