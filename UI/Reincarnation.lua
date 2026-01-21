@@ -71,6 +71,7 @@ function addon.CreateReincarnationButton(isVertical)
     cooldown:SetDrawSwipe(true)
     cooldown:SetDrawEdge(false)
     cooldown:SetHideCountdownNumbers(true) -- Hide default numbers, we use our own
+    cooldown.noCooldownCount = true -- Prevent OmniCC/tullaCC from adding duplicate timers
     btn.cooldown = cooldown
 
     -- Tooltip
