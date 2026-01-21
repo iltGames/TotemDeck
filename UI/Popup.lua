@@ -61,6 +61,19 @@ function addon.CreatePopupButton(parent, totemData, element, index)
     local totemName = addon.GetTotemName(totemData.spellID)
     btn:SetAttribute("spell1", totemName)
 
+    -- Enable casting while any modifier is held
+    -- (modifier+click should work the same as regular click)
+    -- Set all modifiers so it works regardless of popup modifier setting
+    btn:SetAttribute("shift-type*", "spell")
+    btn:SetAttribute("shift-spell*", totemName)
+    btn:SetAttribute("shift-type2", "")  -- Right-click: no cast, just PostClick
+    btn:SetAttribute("ctrl-type*", "spell")
+    btn:SetAttribute("ctrl-spell*", totemName)
+    btn:SetAttribute("ctrl-type2", "")
+    btn:SetAttribute("alt-type*", "spell")
+    btn:SetAttribute("alt-spell*", totemName)
+    btn:SetAttribute("alt-type2", "")
+
     -- Right click = set active (now using spell ID)
     btn:HookScript("PostClick", function(self, button)
         if button == "RightButton" then
@@ -127,9 +140,9 @@ function addon.ShowPopup(hoveredElement)
         local color = ELEMENT_COLORS[elem]
         if not InCombatLockdown() then
             container:Show() -- Only call Show() outside combat (secure frame restriction)
+            container:SetFrameStrata("DIALOG") -- Use DIALOG so GameTooltip (TOOLTIP strata) is above
         end
         container:SetAlpha(1)
-        container:SetFrameStrata("DIALOG") -- Use DIALOG so GameTooltip (TOOLTIP strata) is above
 
         -- Highlight hovered element, dim others
         if elem == hoveredElement then
@@ -195,11 +208,11 @@ function addon.HidePopup()
     addon.state.popupVisible = false
     for _, container in pairs(popupContainers) do
         if InCombatLockdown() then
-            -- In combat: can't Hide() frames with secure children, use alpha instead
+            -- In combat: can't Hide()/SetFrameStrata() on frames with secure children, use alpha instead
             container:SetAlpha(0)
-            container:SetFrameStrata("BACKGROUND")
         else
             -- Out of combat: actually hide for clean mouse passthrough
+            container:SetFrameStrata("BACKGROUND")
             container:Hide()
         end
     end

@@ -137,12 +137,14 @@ function addon.CreateActionBarFrame()
 
         -- Ctrl+click to move the frame
         btn:HookScript("OnMouseDown", function(self, button)
-            if button == "LeftButton" and IsControlKeyDown() and not TotemDeckDB.locked then
+            if button == "LeftButton" and IsControlKeyDown() and not TotemDeckDB.locked and not InCombatLockdown() then
                 actionBarFrame:StartMoving()
             end
         end)
         btn:HookScript("OnMouseUp", function(self, button)
-            actionBarFrame:StopMovingOrSizing()
+            if not InCombatLockdown() then
+                actionBarFrame:StopMovingOrSizing()
+            end
             local point, _, _, x, y = actionBarFrame:GetPoint()
             TotemDeckDB.barPos = { point = point, x = x, y = y }
         end)
