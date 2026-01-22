@@ -99,7 +99,6 @@ addon.ELEMENT_COLORS = {
 -- Map totem spell IDs to whether they provide a player buff (for out-of-range detection)
 -- Value is true if the totem provides a buff that can be checked
 addon.TOTEM_PROVIDES_BUFF = {
-    [8512] = true,   -- Windfury Totem
     [8835] = true,   -- Grace of Air Totem
     [25908] = true,  -- Tranquil Air Totem
     [3738] = true,   -- Wrath of Air Totem
