@@ -38,6 +38,7 @@ addon.defaults = {
     popupModifier = "NONE", -- Modifier key required to show popup (NONE, SHIFT, CTRL, ALT)
     greyOutPlacedTotem = true, -- Grey out icon when placed totem differs from active
     barScale = 1.0, -- Scale factor for the action bar
+    disablePopupInCombat = false, -- Completely disable popup bars in combat (not just hide)
     customMacros = {}, -- User-defined macros with template placeholders
     defaultMacrosEnabled = { -- Toggle default macros on/off
         TDEarth = true,

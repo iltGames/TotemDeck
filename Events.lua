@@ -190,13 +190,36 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         addon.UpdateTimers()
 
     elseif event == "PLAYER_REGEN_DISABLED" then
-        -- Entering combat: ensure all popup containers are shown (at alpha=0 if hidden)
-        -- so we can Show/Hide via alpha during combat
-        for _, container in pairs(addon.UI.popupContainers) do
-            if not container:IsShown() then
-                container:Show()
+        -- Entering combat
+        if TotemDeckDB.disablePopupInCombat then
+            -- If disable popup in combat is enabled, hide them completely before combat lockdown
+            addon.state.popupVisible = false
+            for elem, container in pairs(addon.UI.popupContainers) do
                 container:SetAlpha(0)
                 container:SetFrameStrata("BACKGROUND")
+                container:EnableMouse(false)
+                -- Disable mouse on all popup buttons
+                for _, btn in ipairs(addon.UI.popupButtons[elem] or {}) do
+                    btn:EnableMouse(false)
+                    btn.visual:EnableMouse(false)
+                end
+                container:Hide()
+            end
+        else
+            -- Normal behavior: ensure all popup containers are shown (at alpha=0 if hidden)
+            -- so we can Show/Hide via alpha during combat
+            for elem, container in pairs(addon.UI.popupContainers) do
+                if not container:IsShown() then
+                    container:Show()
+                    container:SetAlpha(0)
+                    container:SetFrameStrata("BACKGROUND")
+                end
+                -- Ensure mouse is enabled on all buttons (may have been disabled from HidePopup)
+                container:EnableMouse(true)
+                for _, btn in ipairs(addon.UI.popupButtons[elem] or {}) do
+                    btn:EnableMouse(true)
+                    btn.visual:EnableMouse(true)
+                end
             end
         end
 

@@ -129,6 +129,11 @@ end
 
 -- Show all popup columns (called when hovering any main bar button or popup button)
 function addon.ShowPopup(hoveredElement)
+    -- If popup is disabled in combat and we're in combat, don't show at all
+    if TotemDeckDB.disablePopupInCombat and InCombatLockdown() then
+        return
+    end
+
     addon.state.popupVisible = true
     addon.state.popupHideDelay = 0
 
@@ -141,6 +146,12 @@ function addon.ShowPopup(hoveredElement)
         if not InCombatLockdown() then
             container:Show() -- Only call Show() outside combat (secure frame restriction)
             container:SetFrameStrata("DIALOG") -- Use DIALOG so GameTooltip (TOOLTIP strata) is above
+        end
+        -- EnableMouse is not protected, can be called in combat
+        container:EnableMouse(true)
+        for _, btn in ipairs(popupButtons[elem] or {}) do
+            btn:EnableMouse(true)
+            btn.visual:EnableMouse(true)
         end
         container:SetAlpha(1)
 
@@ -206,13 +217,19 @@ function addon.HidePopup()
         return
     end
     addon.state.popupVisible = false
-    for _, container in pairs(popupContainers) do
+    for elem, container in pairs(popupContainers) do
         if InCombatLockdown() then
             -- In combat: can't Hide()/SetFrameStrata() on frames with secure children, use alpha instead
             container:SetAlpha(0)
         else
             -- Out of combat: actually hide for clean mouse passthrough
             container:SetFrameStrata("BACKGROUND")
+            container:EnableMouse(false)
+            -- Disable mouse on all popup buttons for click-through
+            for _, btn in ipairs(popupButtons[elem] or {}) do
+                btn:EnableMouse(false)
+                btn.visual:EnableMouse(false)
+            end
             container:Hide()
         end
     end

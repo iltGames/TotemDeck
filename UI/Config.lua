@@ -461,13 +461,6 @@ function addon.CreateConfigWindow()
     end)
     frame.scaleSlider = scaleSlider
 
-    -- Combat warning note
-    local warningText = layoutContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    warningText:SetPoint("TOPLEFT", layoutContent, "TOPLEFT", 10, -108)
-    warningText:SetWidth(500)
-    warningText:SetJustifyH("LEFT")
-    warningText:SetText("|cFFFFAA00Note:|r In combat, popup bars are invisible but still clickable (Blizzard blocks hiding frames). Enable 'Always Show Popup' to avoid accidental clicks.")
-    warningText:SetTextColor(0.7, 0.7, 0.7)
 
     -- Options (full width, 2-column layout for checkboxes)
     local optionsSection = CreateLayoutSection(layoutContent, "Options", -130, 155)
@@ -508,6 +501,13 @@ function addon.CreateConfigWindow()
         TotemDeckDB.alwaysShowPopup = self:GetChecked()
         if TotemDeckDB.alwaysShowPopup then
             addon.ShowPopup(GetElementOrder()[1])
+            -- Disable "Disable Popup in Combat" option
+            if frame.disablePopupCombatCheck then
+                frame.disablePopupCombatCheck:SetChecked(false)
+                frame.disablePopupCombatCheck:Disable()
+                frame.disablePopupCombatCheck.label:SetTextColor(0.5, 0.5, 0.5)
+                TotemDeckDB.disablePopupInCombat = false
+            end
         else
             addon.state.popupVisible = false
             for _, container in pairs(addon.UI.popupContainers) do
@@ -517,6 +517,11 @@ function addon.CreateConfigWindow()
                     container:SetAlpha(0)
                     container:SetFrameStrata("BACKGROUND")
                 end
+            end
+            -- Re-enable "Disable Popup in Combat" option
+            if frame.disablePopupCombatCheck then
+                frame.disablePopupCombatCheck:Enable()
+                frame.disablePopupCombatCheck.label:SetTextColor(1, 1, 1)
             end
         end
     end)
@@ -609,6 +614,47 @@ function addon.CreateConfigWindow()
     showWeaponLabel:SetPoint("LEFT", showWeaponCheck, "RIGHT", 4, 0)
     showWeaponLabel:SetText("Show Weapon Buffs")
     frame.showWeaponCheck = showWeaponCheck
+
+    local disablePopupCombatCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
+    disablePopupCombatCheck:SetPoint("TOPLEFT", 260, -76)
+    disablePopupCombatCheck:SetChecked(TotemDeckDB.disablePopupInCombat)
+    disablePopupCombatCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.disablePopupInCombat = self:GetChecked()
+    end)
+    local disablePopupCombatLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    disablePopupCombatLabel:SetPoint("LEFT", disablePopupCombatCheck, "RIGHT", 4, 0)
+    disablePopupCombatLabel:SetText("Disable Popup in Combat")
+    disablePopupCombatCheck.label = disablePopupCombatLabel
+    -- Tooltip for the checkbox
+    disablePopupCombatCheck:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Disable Popup in Combat")
+        GameTooltip:AddLine("Workaround for in-combat click-through issues.", 1, 1, 1, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("When enabled, popup bars are completely removed during combat instead of just hidden.", 0.7, 0.7, 0.7, true)
+        if TotemDeckDB.alwaysShowPopup then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Disabled while 'Always Show Popup' is enabled.", 1, 0.5, 0.5, true)
+        end
+        GameTooltip:Show()
+    end)
+    disablePopupCombatCheck:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- Disable if Always Show Popup is enabled
+    if TotemDeckDB.alwaysShowPopup then
+        disablePopupCombatCheck:SetChecked(false)
+        disablePopupCombatCheck:Disable()
+        disablePopupCombatLabel:SetTextColor(0.5, 0.5, 0.5)
+        TotemDeckDB.disablePopupInCombat = false
+    end
+    frame.disablePopupCombatCheck = disablePopupCombatCheck
+
+    -- Note under Disable Popup in Combat
+    local disablePopupNote = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    disablePopupNote:SetPoint("TOPLEFT", 284, -100)
+    disablePopupNote:SetWidth(220)
+    disablePopupNote:SetJustifyH("LEFT")
+    disablePopupNote:SetText("Workaround for in-combat click-through issues")
+    disablePopupNote:SetTextColor(0.6, 0.6, 0.6)
 
     --------------------------
     -- ORDERING TAB
@@ -1165,6 +1211,17 @@ local function RefreshConfigWindowState()
     end
     if configWindow.showWeaponCheck then
         configWindow.showWeaponCheck:SetChecked(TotemDeckDB.showWeaponBuffs)
+    end
+    if configWindow.disablePopupCombatCheck then
+        if TotemDeckDB.alwaysShowPopup then
+            configWindow.disablePopupCombatCheck:SetChecked(false)
+            configWindow.disablePopupCombatCheck:Disable()
+            configWindow.disablePopupCombatCheck.label:SetTextColor(0.5, 0.5, 0.5)
+        else
+            configWindow.disablePopupCombatCheck:SetChecked(TotemDeckDB.disablePopupInCombat)
+            configWindow.disablePopupCombatCheck:Enable()
+            configWindow.disablePopupCombatCheck.label:SetTextColor(1, 1, 1)
+        end
     end
     if configWindow.scaleSlider then
         configWindow.scaleSlider:SetValue(TotemDeckDB.barScale or 1.0)
