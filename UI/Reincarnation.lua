@@ -77,17 +77,19 @@ function addon.CreateReincarnationButton(isVertical)
     -- Tooltip
     btn:SetScript("OnEnter", function(self)
         self.border:SetBackdropBorderColor(1, 1, 1, 1)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        local _, _, _, _, _, _, spellID = GetSpellInfo("Reincarnation")
-        if spellID then
-            GameTooltip:SetSpellByID(spellID)
-        else
-            GameTooltip:SetText("Reincarnation", 1, 1, 1)
+        if TotemDeckDB.showTooltips ~= false then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            local _, _, _, _, _, _, spellID = GetSpellInfo("Reincarnation")
+            if spellID then
+                GameTooltip:SetSpellByID(spellID)
+            else
+                GameTooltip:SetText("Reincarnation", 1, 1, 1)
+            end
+            local ankhCount = GetItemCount(ANKH_ITEM_ID)
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Ankhs: " .. ankhCount, 0.7, 0.7, 0.7)
+            GameTooltip:Show()
         end
-        local ankhCount = GetItemCount(ANKH_ITEM_ID)
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Ankhs: " .. ankhCount, 0.7, 0.7, 0.7)
-        GameTooltip:Show()
     end)
 
     btn:SetScript("OnLeave", function(self)

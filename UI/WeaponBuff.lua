@@ -252,16 +252,18 @@ function addon.CreateWeaponBuffButton(isVertical)
         popupBtn:SetScript("OnEnter", function(self)
             self.border:SetBackdropBorderColor(1, 1, 1, 1)
             addon.state.weaponBuffPopupVisible = true -- Keep popup visible
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            if self.spellID then
-                GameTooltip:SetSpellByID(self.spellID)
-            else
-                GameTooltip:SetText(self.buffName, 1, 1, 1)
+            if TotemDeckDB.showTooltips ~= false then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                if self.spellID then
+                    GameTooltip:SetSpellByID(self.spellID)
+                else
+                    GameTooltip:SetText(self.buffName, 1, 1, 1)
+                end
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine("Left-click: Apply to main hand", 0.5, 0.5, 0.5)
+                GameTooltip:AddLine("Right-click: Apply to off-hand", 0.5, 0.5, 0.5)
+                GameTooltip:Show()
             end
-            GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("Left-click: Apply to main hand", 0.5, 0.5, 0.5)
-            GameTooltip:AddLine("Right-click: Apply to off-hand", 0.5, 0.5, 0.5)
-            GameTooltip:Show()
         end)
 
         popupBtn:SetScript("OnLeave", function(self)
@@ -307,30 +309,32 @@ function addon.CreateWeaponBuffButton(isVertical)
         end
 
         -- Show tooltip with current weapon enchant info
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Weapon Buffs", 1, 1, 1)
+        if TotemDeckDB.showTooltips ~= false then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Weapon Buffs", 1, 1, 1)
 
-        local enchantInfo = GetCurrentWeaponBuff()
-        if enchantInfo.mainHand and enchantInfo.mainHandBuff then
-            local buffName = addon.GetWeaponBuffName(enchantInfo.mainHandBuff.spellID)
-            GameTooltip:AddLine("Main Hand: " .. (buffName or "Unknown"), 0, 1, 0)
-        elseif enchantInfo.mainHand then
-            GameTooltip:AddLine("Main Hand: Enchanted", 0, 1, 0)
-        else
-            GameTooltip:AddLine("Main Hand: None", 0.5, 0.5, 0.5)
+            local enchantInfo = GetCurrentWeaponBuff()
+            if enchantInfo.mainHand and enchantInfo.mainHandBuff then
+                local buffName = addon.GetWeaponBuffName(enchantInfo.mainHandBuff.spellID)
+                GameTooltip:AddLine("Main Hand: " .. (buffName or "Unknown"), 0, 1, 0)
+            elseif enchantInfo.mainHand then
+                GameTooltip:AddLine("Main Hand: Enchanted", 0, 1, 0)
+            else
+                GameTooltip:AddLine("Main Hand: None", 0.5, 0.5, 0.5)
+            end
+            if enchantInfo.offHand and enchantInfo.offHandBuff then
+                local buffName = addon.GetWeaponBuffName(enchantInfo.offHandBuff.spellID)
+                GameTooltip:AddLine("Off Hand: " .. (buffName or "Unknown"), 0, 1, 0)
+            elseif enchantInfo.offHand then
+                GameTooltip:AddLine("Off Hand: Enchanted", 0, 1, 0)
+            else
+                GameTooltip:AddLine("Off Hand: None", 0.5, 0.5, 0.5)
+            end
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Left-click: Apply to main hand", 0.5, 0.5, 0.5)
+            GameTooltip:AddLine("Right-click: Apply to off-hand", 0.5, 0.5, 0.5)
+            GameTooltip:Show()
         end
-        if enchantInfo.offHand and enchantInfo.offHandBuff then
-            local buffName = addon.GetWeaponBuffName(enchantInfo.offHandBuff.spellID)
-            GameTooltip:AddLine("Off Hand: " .. (buffName or "Unknown"), 0, 1, 0)
-        elseif enchantInfo.offHand then
-            GameTooltip:AddLine("Off Hand: Enchanted", 0, 1, 0)
-        else
-            GameTooltip:AddLine("Off Hand: None", 0.5, 0.5, 0.5)
-        end
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Left-click: Apply to main hand", 0.5, 0.5, 0.5)
-        GameTooltip:AddLine("Right-click: Apply to off-hand", 0.5, 0.5, 0.5)
-        GameTooltip:Show()
     end)
 
     btn:SetScript("OnLeave", function(self)

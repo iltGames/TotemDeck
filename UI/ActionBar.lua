@@ -160,27 +160,29 @@ function addon.CreateActionBarFrame()
             if IsPopupModifierPressed() then
                 addon.ShowPopup(self.element, self)
             end
-            -- Show tooltip using spell info
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            if self.showingPlaced and self.placedSpellID then
-                -- Show placed totem info using spell ID
-                GameTooltip:SetSpellByID(self.placedSpellID)
+            -- Show tooltip using spell info (if enabled)
+            if TotemDeckDB.showTooltips ~= false then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                if self.showingPlaced and self.placedSpellID then
+                    -- Show placed totem info using spell ID
+                    GameTooltip:SetSpellByID(self.placedSpellID)
+                    GameTooltip:AddLine(" ")
+                    GameTooltip:AddLine("Currently placed (not your active totem)", 0.7, 0.7, 0.7)
+                elseif self.spellID then
+                    -- Use highest trained rank for tooltip
+                    local trainedID = addon.GetHighestRankSpellID(self.spellID) or self.spellID
+                    GameTooltip:SetSpellByID(trainedID)
+                elseif self.totemName then
+                    GameTooltip:SetText(self.totemName, 1, 1, 1)
+                else
+                    GameTooltip:SetText(self.element .. " Totem", 1, 1, 1)
+                end
                 GameTooltip:AddLine(" ")
-                GameTooltip:AddLine("Currently placed (not your active totem)", 0.7, 0.7, 0.7)
-            elseif self.spellID then
-                -- Use highest trained rank for tooltip
-                local trainedID = addon.GetHighestRankSpellID(self.spellID) or self.spellID
-                GameTooltip:SetSpellByID(trainedID)
-            elseif self.totemName then
-                GameTooltip:SetText(self.totemName, 1, 1, 1)
-            else
-                GameTooltip:SetText(self.element .. " Totem", 1, 1, 1)
+                GameTooltip:AddLine("Left-click to cast", 0.5, 0.5, 0.5)
+                GameTooltip:AddLine("Right-click to dismiss", 0.5, 0.5, 0.5)
+                GameTooltip:AddLine("Shift+Right-click for Totemic Call", 0.5, 0.5, 0.5)
+                GameTooltip:Show()
             end
-            GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("Left-click to cast", 0.5, 0.5, 0.5)
-            GameTooltip:AddLine("Right-click to dismiss", 0.5, 0.5, 0.5)
-            GameTooltip:AddLine("Shift+Right-click for Totemic Call", 0.5, 0.5, 0.5)
-            GameTooltip:Show()
         end)
 
         btn:SetScript("OnLeave", function(self)

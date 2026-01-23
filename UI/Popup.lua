@@ -92,24 +92,26 @@ function addon.CreatePopupButton(parent, totemData, element, index)
         addon.ShowPopup(self.element)
         -- Then highlight this specific button
         self.border:SetBackdropBorderColor(1, 1, 1, 1)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        if self.spellID then
-            -- Use highest trained rank for tooltip
-            local trainedID = addon.GetHighestRankSpellID(self.spellID) or self.spellID
-            GameTooltip:SetSpellByID(trainedID)
-        else
-            GameTooltip:SetText(self.totemName, 1, 1, 1)
-        end
-        -- Check if this is the active totem (compare spell IDs)
-        local activeKey = "active" .. self.element
-        if TotemDeckDB[activeKey] == self.spellID then
+        if TotemDeckDB.showTooltips ~= false then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            if self.spellID then
+                -- Use highest trained rank for tooltip
+                local trainedID = addon.GetHighestRankSpellID(self.spellID) or self.spellID
+                GameTooltip:SetSpellByID(trainedID)
+            else
+                GameTooltip:SetText(self.totemName, 1, 1, 1)
+            end
+            -- Check if this is the active totem (compare spell IDs)
+            local activeKey = "active" .. self.element
+            if TotemDeckDB[activeKey] == self.spellID then
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine("(Active)", 0, 1, 0)
+            end
             GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("(Active)", 0, 1, 0)
+            GameTooltip:AddLine("Left-click to cast", 0.5, 0.5, 0.5)
+            GameTooltip:AddLine("Right-click to set active", 0.5, 0.5, 0.5)
+            GameTooltip:Show()
         end
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Left-click to cast", 0.5, 0.5, 0.5)
-        GameTooltip:AddLine("Right-click to set active", 0.5, 0.5, 0.5)
-        GameTooltip:Show()
     end)
 
     btn:SetScript("OnLeave", function(self)
@@ -146,12 +148,12 @@ function addon.ShowPopup(hoveredElement)
         if not InCombatLockdown() then
             container:Show() -- Only call Show() outside combat (secure frame restriction)
             container:SetFrameStrata("DIALOG") -- Use DIALOG so GameTooltip (TOOLTIP strata) is above
-        end
-        -- EnableMouse is not protected, can be called in combat
-        container:EnableMouse(true)
-        for _, btn in ipairs(popupButtons[elem] or {}) do
-            btn:EnableMouse(true)
-            btn.visual:EnableMouse(true)
+            -- EnableMouse is protected on secure frames, only call outside combat
+            container:EnableMouse(true)
+            for _, btn in ipairs(popupButtons[elem] or {}) do
+                btn:EnableMouse(true)
+                btn.visual:EnableMouse(true)
+            end
         end
         container:SetAlpha(1)
 

@@ -39,6 +39,7 @@ addon.defaults = {
     greyOutPlacedTotem = true, -- Grey out icon when placed totem differs from active
     barScale = 1.0, -- Scale factor for the action bar
     disablePopupInCombat = false, -- Completely disable popup bars in combat (not just hide)
+    showTooltips = true, -- Show tooltips on hover
     customMacros = {}, -- User-defined macros with template placeholders
     defaultMacrosEnabled = { -- Toggle default macros on/off
         TDEarth = true,

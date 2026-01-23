@@ -648,13 +648,16 @@ function addon.CreateConfigWindow()
     end
     frame.disablePopupCombatCheck = disablePopupCombatCheck
 
-    -- Note under Disable Popup in Combat
-    local disablePopupNote = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    disablePopupNote:SetPoint("TOPLEFT", 284, -100)
-    disablePopupNote:SetWidth(220)
-    disablePopupNote:SetJustifyH("LEFT")
-    disablePopupNote:SetText("Workaround for in-combat click-through issues")
-    disablePopupNote:SetTextColor(0.6, 0.6, 0.6)
+    local showTooltipsCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
+    showTooltipsCheck:SetPoint("TOPLEFT", 260, -100)
+    showTooltipsCheck:SetChecked(TotemDeckDB.showTooltips ~= false) -- Default to true
+    showTooltipsCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.showTooltips = self:GetChecked()
+    end)
+    local showTooltipsLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    showTooltipsLabel:SetPoint("LEFT", showTooltipsCheck, "RIGHT", 4, 0)
+    showTooltipsLabel:SetText("Show Tooltips")
+    frame.showTooltipsCheck = showTooltipsCheck
 
     --------------------------
     -- ORDERING TAB
@@ -1225,6 +1228,9 @@ local function RefreshConfigWindowState()
     end
     if configWindow.scaleSlider then
         configWindow.scaleSlider:SetValue(TotemDeckDB.barScale or 1.0)
+    end
+    if configWindow.showTooltipsCheck then
+        configWindow.showTooltipsCheck:SetChecked(TotemDeckDB.showTooltips ~= false)
     end
     -- Refresh default macro checkboxes
     if configWindow.defaultMacroCheckboxes then
