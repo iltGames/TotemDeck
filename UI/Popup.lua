@@ -155,6 +155,7 @@ function addon.ShowPopup(hoveredElement)
                 btn.visual:EnableMouse(true)
             end
         end
+        -- Alpha can always be changed, used for combat visibility
         container:SetAlpha(1)
 
         -- Highlight hovered element, dim others

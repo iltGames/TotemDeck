@@ -233,6 +233,19 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         -- Also update custom macros (in case active totems changed during combat)
         addon.UpdateCustomMacros()
 
+        -- Restore proper popup state after combat
+        -- During combat, mouse was enabled for alpha-based visibility; now properly hide if needed
+        if not addon.state.popupVisible and not TotemDeckDB.alwaysShowPopup then
+            for elem, container in pairs(addon.UI.popupContainers) do
+                container:EnableMouse(false)
+                for _, btn in ipairs(addon.UI.popupButtons[elem] or {}) do
+                    btn:EnableMouse(false)
+                    btn.visual:EnableMouse(false)
+                end
+                container:Hide()
+            end
+        end
+
     elseif event == "BAG_UPDATE" then
         -- Update Ankh count for Reincarnation button
         addon.UpdateReincarnationButton()
