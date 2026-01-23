@@ -125,8 +125,9 @@ function addon.CreateActionBarFrame()
         end
 
         -- Shift+right-click to cast Totemic Call (recall all totems)
+        -- Use spell ID 36936 for locale-independent lookup
         btn:SetAttribute("shift-type2", "spell")
-        btn:SetAttribute("shift-spell2", "Totemic Call")
+        btn:SetAttribute("shift-spell2", GetSpellInfo(36936))
 
         -- Right-click to dismiss totem (but not when shift is held)
         btn:HookScript("PostClick", function(self, button)
