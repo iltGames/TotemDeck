@@ -18,6 +18,7 @@ A lightweight shaman totem management addon for WoW Classic. Streamlined totem b
 - **Bar style** - Traditional timer bars positioned above/below/left/right of the bar
 - **Icon style** - Compact countdown text positioned above/below/left/right of each button
 - **Placed totem indicator** - Shows when placed totem differs from active selection (desaturated icon)
+- **Expiry sound alerts** - Configurable sound when totems have 5 seconds remaining (per-element)
 
 ### Reincarnation Tracker
 - Small button showing Reincarnation with Ankh count overlay
@@ -67,6 +68,7 @@ Creates 5 macros for your action bars or create your own custom macro:
 | Dim Out of Range | On / Off |
 | Show Reincarnation | On / Off |
 | Show Weapon Buffs | On / Off |
+| Expiry Sounds | Per-element sound selection |
 
 ### Combat Note
 In combat, Blizzard restricts hiding UI frames. Popup bars become invisible but remain clickable in their last position. Enable **Always Show Popup** to avoid accidental clicks during combat.

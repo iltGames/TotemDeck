@@ -343,7 +343,8 @@ function addon.CreateConfigWindow()
 
     CreateTab("layout", "Layout", 15)
     CreateTab("ordering", "Totem Order", 120)
-    CreateTab("macros", "Macros", 225)
+    CreateTab("sounds", "Sounds", 225)
+    CreateTab("macros", "Macros", 330)
 
     local contentFrame = CreateFrame("Frame", nil, frame)
     contentFrame:SetPoint("TOPLEFT", 15, -65)
@@ -813,6 +814,151 @@ function addon.CreateConfigWindow()
     end)
 
     --------------------------
+    -- SOUNDS TAB
+    --------------------------
+    local soundsContent = CreateFrame("Frame", nil, contentFrame)
+    soundsContent:SetAllPoints()
+    tabContent["sounds"] = soundsContent
+
+    -- Totem Expiry Alerts Section
+    local expirySection = CreateFrame("Frame", nil, soundsContent, "BackdropTemplate")
+    expirySection:SetSize(520, 220)
+    expirySection:SetPoint("TOP", soundsContent, "TOP", 0, 0)
+    expirySection:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    expirySection:SetBackdropColor(0.05, 0.05, 0.05, 0.8)
+    expirySection:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+
+    local expiryLabel = expirySection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    expiryLabel:SetPoint("TOPLEFT", 10, -8)
+    expiryLabel:SetText("Totem Expiry Alerts")
+    expiryLabel:SetTextColor(1, 0.82, 0)
+
+    -- Master enable checkbox
+    local masterSoundCheck = CreateFrame("CheckButton", nil, expirySection, "UICheckButtonTemplate")
+    masterSoundCheck:SetPoint("TOPLEFT", 10, -30)
+    masterSoundCheck:SetChecked(TotemDeckDB.totemExpirySound ~= false)
+    local masterSoundLabel = expirySection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    masterSoundLabel:SetPoint("LEFT", masterSoundCheck, "RIGHT", 4, 0)
+    masterSoundLabel:SetText("Enable expiry sounds (5 sec warning)")
+    frame.masterSoundCheck = masterSoundCheck
+
+    -- Build sound options list for dropdowns
+    local soundOptions = {}
+    for _, sound in ipairs(addon.EXPIRY_SOUNDS) do
+        table.insert(soundOptions, { label = sound.name, value = sound.id })
+    end
+
+    -- Per-element sound dropdowns
+    local elementSoundDropdowns = {}
+    local elementSoundPreviews = {}
+
+    local function UpdateSoundDropdownStates()
+        local enabled = masterSoundCheck:GetChecked()
+        for element, dropdown in pairs(elementSoundDropdowns) do
+            if enabled then
+                dropdown:Enable()
+                dropdown:SetAlpha(1)
+                if elementSoundPreviews[element] then
+                    elementSoundPreviews[element]:Enable()
+                    elementSoundPreviews[element]:SetAlpha(1)
+                end
+            else
+                dropdown:Disable()
+                dropdown:SetAlpha(0.5)
+                if elementSoundPreviews[element] then
+                    elementSoundPreviews[element]:Disable()
+                    elementSoundPreviews[element]:SetAlpha(0.5)
+                end
+            end
+        end
+        if frame.setAllSoundDropdown then
+            if enabled then
+                frame.setAllSoundDropdown:Enable()
+                frame.setAllSoundDropdown:SetAlpha(1)
+            else
+                frame.setAllSoundDropdown:Disable()
+                frame.setAllSoundDropdown:SetAlpha(0.5)
+            end
+        end
+    end
+
+    masterSoundCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.totemExpirySound = self:GetChecked()
+        UpdateSoundDropdownStates()
+    end)
+
+    for i, element in ipairs(ELEMENT_ORDER) do
+        local color = ELEMENT_COLORS[element]
+        local yOffset = -55 - (i - 1) * 30
+
+        -- Element label
+        local elemLabel = expirySection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        elemLabel:SetPoint("TOPLEFT", 20, yOffset)
+        elemLabel:SetText(element .. ":")
+        elemLabel:SetTextColor(color.r, color.g, color.b)
+        elemLabel:SetWidth(50)
+        elemLabel:SetJustifyH("RIGHT")
+
+        -- Sound dropdown
+        local currentSoundID = (TotemDeckDB.totemExpirySoundIDs and TotemDeckDB.totemExpirySoundIDs[element]) or 8959
+        local dropdown = CreateDropdown(expirySection, "", soundOptions, currentSoundID, 80, yOffset + 12, function(value)
+            if not TotemDeckDB.totemExpirySoundIDs then
+                TotemDeckDB.totemExpirySoundIDs = {}
+            end
+            TotemDeckDB.totemExpirySoundIDs[element] = value
+        end)
+        elementSoundDropdowns[element] = dropdown
+
+        -- Preview button
+        local previewBtn = CreateFrame("Button", nil, expirySection, "UIPanelButtonTemplate")
+        previewBtn:SetSize(22, 22)
+        previewBtn:SetPoint("LEFT", dropdown, "RIGHT", 5, 0)
+        previewBtn:SetText(">")
+        previewBtn:SetScript("OnClick", function()
+            local soundID = TotemDeckDB.totemExpirySoundIDs and TotemDeckDB.totemExpirySoundIDs[element] or 8959
+            if soundID and soundID > 0 then
+                PlaySound(soundID, "Master")
+            end
+        end)
+        previewBtn:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Preview sound")
+            GameTooltip:Show()
+        end)
+        previewBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        elementSoundPreviews[element] = previewBtn
+    end
+
+    frame.elementSoundDropdowns = elementSoundDropdowns
+
+    -- "Set All" dropdown
+    local setAllLabel = expirySection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    setAllLabel:SetPoint("TOPLEFT", 20, -180)
+    setAllLabel:SetText("Set All:")
+    setAllLabel:SetTextColor(0.7, 0.7, 0.7)
+
+    local setAllDropdown = CreateDropdown(expirySection, "", soundOptions, 8959, 80, -168, function(value)
+        if not TotemDeckDB.totemExpirySoundIDs then
+            TotemDeckDB.totemExpirySoundIDs = {}
+        end
+        for _, element in ipairs(ELEMENT_ORDER) do
+            TotemDeckDB.totemExpirySoundIDs[element] = value
+            if elementSoundDropdowns[element] and elementSoundDropdowns[element].UpdateValue then
+                elementSoundDropdowns[element].UpdateValue(value)
+            end
+        end
+    end)
+    frame.setAllSoundDropdown = setAllDropdown
+
+    -- Initialize dropdown states based on master toggle
+    UpdateSoundDropdownStates()
+    frame.UpdateSoundDropdownStates = UpdateSoundDropdownStates
+
+    --------------------------
     -- MACROS TAB
     --------------------------
     local macrosContent = CreateFrame("Frame", nil, contentFrame)
@@ -1231,6 +1377,21 @@ local function RefreshConfigWindowState()
     end
     if configWindow.showTooltipsCheck then
         configWindow.showTooltipsCheck:SetChecked(TotemDeckDB.showTooltips ~= false)
+    end
+    -- Sounds tab
+    if configWindow.masterSoundCheck then
+        configWindow.masterSoundCheck:SetChecked(TotemDeckDB.totemExpirySound ~= false)
+    end
+    if configWindow.elementSoundDropdowns then
+        for element, dropdown in pairs(configWindow.elementSoundDropdowns) do
+            if dropdown.UpdateValue then
+                local soundID = (TotemDeckDB.totemExpirySoundIDs and TotemDeckDB.totemExpirySoundIDs[element]) or 8959
+                dropdown.UpdateValue(soundID)
+            end
+        end
+    end
+    if configWindow.UpdateSoundDropdownStates then
+        configWindow.UpdateSoundDropdownStates()
     end
     -- Refresh default macro checkboxes
     if configWindow.defaultMacroCheckboxes then

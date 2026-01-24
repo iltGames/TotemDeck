@@ -40,6 +40,13 @@ addon.defaults = {
     barScale = 1.0, -- Scale factor for the action bar
     disablePopupInCombat = false, -- Completely disable popup bars in combat (not just hide)
     showTooltips = true, -- Show tooltips on hover
+    totemExpirySound = true, -- Master enable/disable expiry sounds
+    totemExpirySoundIDs = { -- Per-element sound IDs (0 = None)
+        Earth = 8959,
+        Fire = 8959,
+        Water = 8959,
+        Air = 8959,
+    },
     customMacros = {}, -- User-defined macros with template placeholders
     defaultMacrosEnabled = { -- Toggle default macros on/off
         TDEarth = true,
@@ -118,6 +125,30 @@ addon.TOTEM_PROVIDES_BUFF = {
 -- Element order for display
 addon.ELEMENT_ORDER = { "Earth", "Fire", "Water", "Air" }
 
+-- Expiry sound options (0 = None)
+addon.EXPIRY_SOUNDS = {
+    { id = 0, name = "None" },
+    -- Alert sounds
+    { id = 8959, name = "Raid Warning" },
+    { id = 8960, name = "Ready Check" },
+    { id = 9379, name = "PvP Flag Taken" },
+    { id = 11466, name = "Not Prepared" },
+    { id = 8066, name = "Low Health" },
+    -- UI sounds
+    { id = 7355, name = "Alarm Clock" },
+    { id = 3081, name = "Auction Close" },
+    { id = 878, name = "Quest Complete" },
+    { id = 888, name = "Level Up" },
+    { id = 120, name = "Loot Coin" },
+    { id = 3175, name = "Map Ping" },
+    -- Fun sounds
+    { id = 416, name = "Murloc Aggro" },
+    { id = 3605, name = "Owl Screech" },
+    { id = 12571, name = "Headless Horseman" },
+    { id = 9036, name = "Wolf Howl" },
+    { id = 3337, name = "Drum Hit" },
+}
+
 -- Totem slot indices (for tracking active totems)
 addon.TOTEM_SLOTS = {
     Fire = 1,
@@ -173,6 +204,9 @@ addon.state = {
     preCastMainHandEnchant = false,
     preCastOffHandEnchant = false,
     pendingVisibilityUpdate = false,
+    totemSoundPlayed = { -- Track per-slot to prevent spam
+        [1] = false, [2] = false, [3] = false, [4] = false
+    },
 }
 
 -- Utility: Check if player is a Shaman

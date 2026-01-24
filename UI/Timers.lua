@@ -119,6 +119,11 @@ function addon.UpdateTimers()
             end
         end
 
+        -- Reset sound flag if no totem in slot
+        if not haveTotem then
+            addon.state.totemSoundPlayed[slot] = false
+        end
+
         if element then
             local bar = timerBars[element]
             local btn = activeTotemButtons[element]
@@ -130,6 +135,20 @@ function addon.UpdateTimers()
 
                 if remaining > 0 then
                     anyActive = true
+
+                    -- Totem expiry sound alert
+                    if remaining <= 5 then
+                        if TotemDeckDB.totemExpirySound and not addon.state.totemSoundPlayed[slot] then
+                            local soundID = TotemDeckDB.totemExpirySoundIDs and TotemDeckDB.totemExpirySoundIDs[element] or 8959
+                            if soundID and soundID > 0 then
+                                PlaySound(soundID, "Master")
+                            end
+                            addon.state.totemSoundPlayed[slot] = true
+                        end
+                    else
+                        -- Reset flag when totem has more than 5 seconds (handles new totem placement)
+                        addon.state.totemSoundPlayed[slot] = false
+                    end
 
                     -- Update bar timer (bars mode)
                     if bar and timerStyle == "bars" then
