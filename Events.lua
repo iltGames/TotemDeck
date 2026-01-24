@@ -246,9 +246,17 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
             end
         end
 
+        -- Apply any pending element visibility updates
+        if addon.state.pendingVisibilityUpdate then
+            addon.state.pendingVisibilityUpdate = false
+            addon.UpdateElementVisibility()
+        end
+
     elseif event == "BAG_UPDATE" then
         -- Update Ankh count for Reincarnation button
         addon.UpdateReincarnationButton()
+        -- Update element visibility based on totem items in inventory
+        addon.UpdateElementVisibility()
 
     elseif event == "UNIT_INVENTORY_CHANGED" then
         -- Update weapon buff button when equipment changes

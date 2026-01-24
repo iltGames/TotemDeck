@@ -138,6 +138,14 @@ addon.WEAPON_BUFFS = {
 -- Ankh item ID for Reincarnation
 addon.ANKH_ITEM_ID = 17030
 
+-- Totem item IDs (required in inventory to cast totems of each element)
+addon.TOTEM_ITEM_IDS = {
+    Earth = 5175,
+    Fire = 5176,
+    Water = 5177,
+    Air = 5178,
+}
+
 -- Shared UI state
 addon.UI = {
     actionBarFrame = nil,
@@ -164,12 +172,20 @@ addon.state = {
     pendingActiveUpdates = {},
     preCastMainHandEnchant = false,
     preCastOffHandEnchant = false,
+    pendingVisibilityUpdate = false,
 }
 
 -- Utility: Check if player is a Shaman
 function addon.IsShaman()
     local _, class = UnitClass("player")
     return class == "SHAMAN"
+end
+
+-- Utility: Check if player has the totem item for an element
+function addon.HasTotemItem(element)
+    local itemID = addon.TOTEM_ITEM_IDS[element]
+    if not itemID then return false end
+    return GetItemCount(itemID) > 0
 end
 
 -- Utility: Get localized totem name from spell ID

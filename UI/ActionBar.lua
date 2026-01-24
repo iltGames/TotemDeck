@@ -263,4 +263,67 @@ function addon.CreateActionBarFrame()
     addon.CreateWeaponBuffButton(isVertical)
 
     actionBarFrame:Show()
+
+    -- Initial update of element visibility based on totem items
+    addon.UpdateElementVisibility()
+end
+
+-- Update visibility of element buttons based on whether player has the required totem item
+function addon.UpdateElementVisibility()
+    if InCombatLockdown() then
+        -- Queue update for after combat
+        addon.state.pendingVisibilityUpdate = true
+        return
+    end
+
+    local actionBarFrame = addon.UI.actionBarFrame
+    if not actionBarFrame then return end
+
+    local direction = TotemDeckDB.popupDirection or "UP"
+    local isVertical = (direction == "LEFT" or direction == "RIGHT")
+
+    local visibleIndex = 0
+    for i, element in ipairs(GetElementOrder()) do
+        local btn = addon.UI.activeTotemButtons[element]
+        local popupContainer = addon.UI.popupContainers[element]
+
+        if btn then
+            local hasTotem = addon.HasTotemItem(element)
+            if hasTotem then
+                visibleIndex = visibleIndex + 1
+                btn:Show()
+                btn:ClearAllPoints()
+                if isVertical then
+                    btn:SetPoint("TOP", 0, -8 - (visibleIndex - 1) * 48)
+                else
+                    btn:SetPoint("LEFT", 8 + (visibleIndex - 1) * 48, 0)
+                end
+                if popupContainer then
+                    -- Popup visibility is managed by ShowPopup/HidePopup
+                end
+            else
+                btn:Hide()
+                if popupContainer then
+                    popupContainer:Hide()
+                    popupContainer:EnableMouse(false)
+                    for _, popupBtn in ipairs(addon.UI.popupButtons[element] or {}) do
+                        popupBtn:EnableMouse(false)
+                        popupBtn.visual:EnableMouse(false)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Resize action bar frame based on visible buttons
+    if visibleIndex > 0 then
+        if isVertical then
+            actionBarFrame:SetSize(48, 8 + visibleIndex * 48)
+        else
+            actionBarFrame:SetSize(8 + visibleIndex * 48, 48)
+        end
+        actionBarFrame:Show()
+    else
+        actionBarFrame:Hide()
+    end
 end

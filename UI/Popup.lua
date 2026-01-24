@@ -144,6 +144,11 @@ function addon.ShowPopup(hoveredElement)
 
     -- Show all element columns, highlight the hovered one
     for elem, container in pairs(popupContainers) do
+        -- Skip elements the player doesn't have totem items for
+        if not addon.HasTotemItem(elem) then
+            -- Keep it hidden
+            container:SetAlpha(0)
+        else
         local color = ELEMENT_COLORS[elem]
         if not InCombatLockdown() then
             container:Show() -- Only call Show() outside combat (secure frame restriction)
@@ -194,6 +199,7 @@ function addon.ShowPopup(hoveredElement)
                 end
             end
         end
+        end -- close HasTotemItem else
     end
 end
 
@@ -205,15 +211,20 @@ function addon.HidePopup()
     -- If always show is enabled, just dim all columns instead of hiding
     if TotemDeckDB.alwaysShowPopup then
         for elem, container in pairs(popupContainers) do
-            local color = ELEMENT_COLORS[elem]
-            container:SetBackdropBorderColor(color.r, color.g, color.b, 0.5)
-            -- Dim all buttons (compare spell IDs)
-            for _, btn in ipairs(popupButtons[elem] or {}) do
-                local activeKey = "active" .. elem
-                if TotemDeckDB[activeKey] == btn.spellID then
-                    btn.border:SetBackdropBorderColor(0, 0.8, 0, 0.8)
-                else
-                    btn.border:SetBackdropBorderColor(color.r * 0.6, color.g * 0.6, color.b * 0.6, 0.6)
+            -- Skip elements without totem items
+            if not addon.HasTotemItem(elem) then
+                container:SetAlpha(0)
+            else
+                local color = ELEMENT_COLORS[elem]
+                container:SetBackdropBorderColor(color.r, color.g, color.b, 0.5)
+                -- Dim all buttons (compare spell IDs)
+                for _, btn in ipairs(popupButtons[elem] or {}) do
+                    local activeKey = "active" .. elem
+                    if TotemDeckDB[activeKey] == btn.spellID then
+                        btn.border:SetBackdropBorderColor(0, 0.8, 0, 0.8)
+                    else
+                        btn.border:SetBackdropBorderColor(color.r * 0.6, color.g * 0.6, color.b * 0.6, 0.6)
+                    end
                 end
             end
         end
@@ -221,7 +232,10 @@ function addon.HidePopup()
     end
     addon.state.popupVisible = false
     for elem, container in pairs(popupContainers) do
-        if InCombatLockdown() then
+        -- Skip elements without totem items (already hidden)
+        if not addon.HasTotemItem(elem) then
+            -- Already hidden by UpdateElementVisibility
+        elseif InCombatLockdown() then
             -- In combat: can't Hide()/SetFrameStrata() on frames with secure children, use alpha instead
             container:SetAlpha(0)
         else
