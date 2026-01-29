@@ -175,6 +175,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         addon.CreateActionBarFrame()
         addon.CreateTimerFrame()
         addon.SetupPopupSystem()
+        addon.CreateMinimapButton()
 
         -- Show popup if always show is enabled
         if TotemDeckDB.alwaysShowPopup then
