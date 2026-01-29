@@ -110,6 +110,19 @@ function addon.CreateActionBarFrame()
         end
         btn.icon = icon
 
+        local pulse = icon:CreateAnimationGroup()
+        local scaleUp = pulse:CreateAnimation("Scale")
+        scaleUp:SetOrder(1)
+        scaleUp:SetDuration(0.12)
+        scaleUp:SetScale(1.2, 1.2)
+        scaleUp:SetSmoothing("OUT")
+        local scaleDown = pulse:CreateAnimation("Scale")
+        scaleDown:SetOrder(2)
+        scaleDown:SetDuration(0.12)
+        scaleDown:SetScale(1/1.2, 1/1.2)
+        scaleDown:SetSmoothing("IN")
+        btn.iconPulse = pulse
+
         -- Register for clicks BEFORE setting attributes
         btn:RegisterForClicks("AnyDown", "AnyUp")
 
@@ -177,6 +190,16 @@ function addon.CreateActionBarFrame()
                 else
                     GameTooltip:SetText(self.element .. " Totem", 1, 1, 1)
                 end
+                if TotemDeckDB.showGroupBuffCount ~= false then
+                    local totemIdentifier = self.placedSpellID or self.spellID or self.totemName
+                    if totemIdentifier then
+                        local buffed, total = addon.GetGroupTotemBuffCount(totemIdentifier)
+                        local buffText = addon.FormatGroupBuffCount(buffed, total)
+                        if buffText then
+                            GameTooltip:AddLine("Group buff: " .. buffText, 0.6, 0.8, 1)
+                        end
+                    end
+                end
                 GameTooltip:AddLine(" ")
                 GameTooltip:AddLine("Left-click to cast", 0.5, 0.5, 0.5)
                 GameTooltip:AddLine("Right-click to dismiss", 0.5, 0.5, 0.5)
@@ -226,6 +249,8 @@ function addon.CreateActionBarFrame()
         local iconTimerText = iconTimer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         iconTimerText:SetPoint("CENTER")
         iconTimerText:SetTextColor(1, 1, 1)
+        local fontFile, fontSize = GameFontNormalSmall:GetFont()
+        iconTimerText:SetFont(fontFile, (fontSize or 10) + 1, "OUTLINE")
 
         -- Function to update icon timer position based on timerPosition setting
         local function UpdateIconTimerPosition()
@@ -244,6 +269,18 @@ function addon.CreateActionBarFrame()
                 iconTimer:SetSize(40, 16)
                 iconTimer:SetPoint("LEFT", btn, "RIGHT", 2, 0)
             end
+            if btn.iconTimerDots then
+                btn.iconTimerDots:ClearAllPoints()
+                if pos == "BELOW" then
+                    btn.iconTimerDots:SetPoint("TOP", iconTimer, "BOTTOM", 0, -1)
+                elseif pos == "LEFT" then
+                    btn.iconTimerDots:SetPoint("RIGHT", iconTimer, "LEFT", -1, 0)
+                elseif pos == "RIGHT" then
+                    btn.iconTimerDots:SetPoint("LEFT", iconTimer, "RIGHT", 1, 0)
+                else
+                    btn.iconTimerDots:SetPoint("BOTTOM", iconTimer, "TOP", 0, 1)
+                end
+            end
         end
         UpdateIconTimerPosition()
 
@@ -251,6 +288,12 @@ function addon.CreateActionBarFrame()
         btn.iconTimerText = iconTimerText
         btn.UpdateIconTimerPosition = UpdateIconTimerPosition
         iconTimer:Hide()
+
+        local iconTimerDots = CreateFrame("Frame", nil, btn)
+        iconTimerDots:SetSize(18, 18)
+        iconTimerDots:SetPoint("BOTTOM", iconTimer, "TOP", 0, 1)
+        iconTimerDots:Hide()
+        btn.iconTimerDots = iconTimerDots
 
         -- Create popup column for this element (anchored to this button)
         addon.CreatePopupColumn(element, btn)

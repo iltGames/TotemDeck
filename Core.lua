@@ -40,6 +40,10 @@ addon.defaults = {
     barScale = 1.0, -- Scale factor for the action bar
     disablePopupInCombat = false, -- Completely disable popup bars in combat (not just hide)
     showTooltips = true, -- Show tooltips on hover
+    showGroupBuffCount = true, -- Show group buff count next to timers/tooltips
+    showGroupBuffStyle = "dots", -- "dots" only
+    showMinimapButton = true, -- Show minimap button
+    minimapButtonPos = 220, -- Angle in degrees
     totemExpirySound = true, -- Master enable/disable expiry sounds
     totemExpirySoundIDs = { -- Per-element sound IDs (0 = None)
         Earth = 8959,
@@ -207,6 +211,7 @@ addon.state = {
     totemSoundPlayed = { -- Track per-slot to prevent spam
         [1] = false, [2] = false, [3] = false, [4] = false
     },
+    totemLastStart = {},
 }
 
 -- Utility: Check if player is a Shaman
@@ -320,10 +325,11 @@ function addon.IsPopupModifierPressed()
     return true
 end
 
--- Check if player has the buff from a totem (for out-of-range detection)
+-- Check if a unit has the buff from a totem (for out-of-range detection)
 -- Returns: true = has buff (in range), false = no buff (out of range), nil = totem doesn't provide a buff
--- Now accepts either spellID or localized totem name
-function addon.HasTotemBuff(totemIdentifier)
+-- Accepts either spellID or localized totem name; unit defaults to "player"
+function addon.HasTotemBuff(totemIdentifier, unit)
+    unit = unit or "player"
     local spellID
     if type(totemIdentifier) == "number" then
         spellID = totemIdentifier
@@ -356,9 +362,9 @@ function addon.HasTotemBuff(totemIdentifier)
     local totemName = addon.GetTotemName(spellID)
     if not totemName then return nil end
 
-    -- Check if player has the buff (using localized name)
+    -- Check if unit has the buff (using localized name)
     for i = 1, 40 do
-        local name = UnitBuff("player", i)
+        local name = UnitBuff(unit, i)
         if not name then break end
         -- Check for exact match or partial match (buff name may be shorter)
         if name == totemName or totemName:find(name, 1, true) or name:find(totemName:gsub(" Totem$", ""), 1, true) then
@@ -366,6 +372,120 @@ function addon.HasTotemBuff(totemIdentifier)
         end
     end
     return false
+end
+
+-- Count how many group members currently have a totem buff
+-- Returns: buffedCount, totalCount, or nil if not in group/raid or not a buff-providing totem
+function addon.GetGroupTotemBuffCount(totemIdentifier)
+    -- Resolve spell ID to determine if this totem provides a buff
+    local spellID
+    if type(totemIdentifier) == "number" then
+        spellID = totemIdentifier
+    else
+        local name, _, _, _, _, _, sid = GetSpellInfo(totemIdentifier)
+        spellID = sid
+        if not spellID then
+            for element, totems in pairs(addon.TOTEMS) do
+                for _, totem in ipairs(totems) do
+                    local totemName = addon.GetTotemName(totem.spellID)
+                    local baseName = totemIdentifier:gsub("%s+[IVXLCDM]+$", "")
+                    if totemName and totemName:find(baseName, 1, true) then
+                        spellID = totem.spellID
+                        break
+                    end
+                end
+                if spellID then break end
+            end
+        end
+    end
+
+    if not spellID or not addon.TOTEM_PROVIDES_BUFF[spellID] then
+        return nil
+    end
+
+    local total = 0
+    local buffed = 0
+
+    if IsInRaid() then
+        local num = GetNumGroupMembers()
+        local playerGroup = nil
+        for i = 1, num do
+            local unit = "raid" .. i
+            if UnitExists(unit) and UnitIsUnit(unit, "player") then
+                local _, _, subgroup = GetRaidRosterInfo(i)
+                playerGroup = subgroup
+                break
+            end
+        end
+        for i = 1, num do
+            local unit = "raid" .. i
+            if UnitExists(unit) then
+                local _, _, subgroup = GetRaidRosterInfo(i)
+                if not playerGroup or subgroup == playerGroup then
+                    total = total + 1
+                    if addon.HasTotemBuff(totemIdentifier, unit) then
+                        buffed = buffed + 1
+                    end
+                end
+            end
+        end
+    elseif IsInGroup() then
+        -- Party (includes player)
+        if UnitExists("player") then
+            total = total + 1
+            if addon.HasTotemBuff(totemIdentifier, "player") then
+                buffed = buffed + 1
+            end
+        end
+        local num = GetNumSubgroupMembers()
+        for i = 1, num do
+            local unit = "party" .. i
+            if UnitExists(unit) then
+                total = total + 1
+                if addon.HasTotemBuff(totemIdentifier, unit) then
+                    buffed = buffed + 1
+                end
+            end
+        end
+    else
+        -- Solo: return player's buff status as 1/1
+        if UnitExists("player") then
+            total = 1
+            if addon.HasTotemBuff(totemIdentifier, "player") then
+                buffed = 1
+            end
+        end
+    end
+
+    if total == 0 then
+        return nil
+    end
+
+    return buffed, total
+end
+
+-- Format group buff count for display
+function addon.FormatGroupBuffCount(buffed, total)
+    if not buffed or not total then
+        return nil
+    end
+
+    local style = TotemDeckDB and TotemDeckDB.showGroupBuffStyle or "dots"
+    if style == "dots" then
+        local filledDot = "|TInterface\\COMMON\\Indicator-Green:16:16:0:0|t"
+        local emptyDot = "|TInterface\\COMMON\\Indicator-Gray:16:16:0:0|t"
+        local dots = {}
+        for i = 1, total do
+            if i <= buffed then
+                dots[#dots + 1] = filledDot
+            else
+                dots[#dots + 1] = emptyDot
+            end
+        end
+        return table.concat(dots, "\n"), false
+    end
+
+    return tostring(buffed) .. "/" .. tostring(total), true
 end
 
 -- Check if a weapon buff spell is known (accepts spell ID)
