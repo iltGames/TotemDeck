@@ -13,6 +13,12 @@ local function UpdateMinimapButtonPosition(button)
 end
 
 function addon.CreateMinimapButton()
+    if TotemDeckDB.showMinimapButton == false
+        or TotemDeckDB.showMinimapButton == 0
+        or TotemDeckDB.showMinimapButton == "0"
+        or TotemDeckDB.showMinimapButton == "false" then
+        return
+    end
     if addon.UI.minimapButton then
         addon.UpdateMinimapButton()
         return
@@ -48,6 +54,15 @@ function addon.CreateMinimapButton()
 
     btn:SetScript("OnClick", function()
         addon.ToggleConfigWindow()
+    end)
+
+    btn:SetScript("OnShow", function(self)
+        if TotemDeckDB.showMinimapButton == false
+            or TotemDeckDB.showMinimapButton == 0
+            or TotemDeckDB.showMinimapButton == "0"
+            or TotemDeckDB.showMinimapButton == "false" then
+            self:Hide()
+        end
     end)
 
     btn:SetScript("OnEnter", function(self)
@@ -87,10 +102,25 @@ end
 
 function addon.UpdateMinimapButton()
     local btn = addon.UI.minimapButton
-    if not btn then return end
+    if not btn then
+        if TotemDeckDB.showMinimapButton == false
+            or TotemDeckDB.showMinimapButton == 0
+            or TotemDeckDB.showMinimapButton == "0"
+            or TotemDeckDB.showMinimapButton == "false" then
+            return
+        end
+        addon.CreateMinimapButton()
+        return
+    end
 
-    if TotemDeckDB.showMinimapButton == false then
+    if TotemDeckDB.showMinimapButton == false
+        or TotemDeckDB.showMinimapButton == 0
+        or TotemDeckDB.showMinimapButton == "0"
+        or TotemDeckDB.showMinimapButton == "false" then
         btn:Hide()
+        btn:SetParent(nil)
+        btn:ClearAllPoints()
+        addon.UI.minimapButton = nil
         return
     end
 

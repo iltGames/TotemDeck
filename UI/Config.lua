@@ -725,12 +725,12 @@ function addon.CreateConfigWindow()
     showMinimapCheck:SetPoint("TOPLEFT", 260, -148)
     showMinimapCheck:SetChecked(TotemDeckDB.showMinimapButton ~= false)
     showMinimapCheck:SetScript("OnClick", function(self)
-        TotemDeckDB.showMinimapButton = self:GetChecked()
+        TotemDeckDB.showMinimapButton = not not self:GetChecked()
         addon.UpdateMinimapButton()
     end)
     local showMinimapLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     showMinimapLabel:SetPoint("LEFT", showMinimapCheck, "RIGHT", 4, 0)
-    showMinimapLabel:SetText("Show minimap button")
+    showMinimapLabel:SetText("Show minimap button (reload)")
     frame.showMinimapCheck = showMinimapCheck
 
     --------------------------
