@@ -311,7 +311,7 @@ timerUpdateFrame:SetScript("OnUpdate", function(self, delta)
             addon.UpdateTimers()
         end
         -- Update weapon buff timer
-        if addon.UI.weaponBuffButton then
+        if addon.UI and addon.UI.weaponBuffButton then
             addon.UpdateWeaponBuffButton()
         end
     end

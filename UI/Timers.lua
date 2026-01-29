@@ -227,6 +227,8 @@ end
 
 -- Update timer bars
 function addon.UpdateTimers()
+    if not addon.UI then return end
+
     local timerFrame = addon.UI.timerFrame
     local timerBars = addon.UI.timerBars
     local activeTotemButtons = addon.UI.activeTotemButtons

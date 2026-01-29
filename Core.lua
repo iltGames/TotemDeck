@@ -256,7 +256,7 @@ end
 function addon.GetTotemBySpellID(spellID)
     for element, totems in pairs(addon.TOTEMS) do
         for _, totem in ipairs(totems) do
-            if totem.spellID == spellID then2
+            if totem.spellID == spellID then
                 return totem, element
             end
         end
