@@ -393,4 +393,46 @@ function addon.SetupPopupSystem()
             end
         end
     end)
+    addon.UI.popupUpdateFrame = updateFrame
+
+    local function AttachPopupLeaveHandlers()
+        for _, container in pairs(addon.UI.popupContainers or {}) do
+            if container and not container.totemDeckLeaveHooked then
+                container.totemDeckLeaveHooked = true
+                container:HookScript("OnLeave", function()
+                    if not TotemDeckDB.alwaysShowPopup then
+                        addon.state.popupHideToken = (addon.state.popupHideToken or 0) + 1
+                        local token = addon.state.popupHideToken
+                        C_Timer.After(0.15, function()
+                            if addon.state.popupHideToken ~= token then return end
+                            if addon.state.popupVisible and not addon.IsMouseOverPopupArea() then
+                                addon.HidePopup()
+                            end
+                        end)
+                    end
+                end)
+            end
+        end
+        for _, buttons in pairs(addon.UI.popupButtons or {}) do
+            for _, btn in ipairs(buttons) do
+                if btn and not btn.totemDeckLeaveHooked then
+                    btn.totemDeckLeaveHooked = true
+                    btn:HookScript("OnLeave", function()
+                        if not TotemDeckDB.alwaysShowPopup then
+                            addon.state.popupHideToken = (addon.state.popupHideToken or 0) + 1
+                            local token = addon.state.popupHideToken
+                            C_Timer.After(0.15, function()
+                                if addon.state.popupHideToken ~= token then return end
+                                if addon.state.popupVisible and not addon.IsMouseOverPopupArea() then
+                                    addon.HidePopup()
+                                end
+                            end)
+                        end
+                    end)
+                end
+            end
+        end
+    end
+
+    C_Timer.After(0, AttachPopupLeaveHandlers)
 end
