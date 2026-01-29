@@ -210,7 +210,9 @@ local function CreateDropdown(parent, label, options, currentValue, x, y, onChan
                 return
             end
         end
-        btnText:SetText(options[1].label)
+        if options[1] then
+            btnText:SetText(options[1].label)
+        end
     end
     UpdateText()
 
@@ -228,24 +230,33 @@ local function CreateDropdown(parent, label, options, currentValue, x, y, onChan
     menu:SetFrameStrata("TOOLTIP")
     menu:Hide()
 
-    for i, opt in ipairs(options) do
-        local item = CreateFrame("Button", nil, menu)
-        item:SetSize(106, 18)
-        item:SetPoint("TOP", menu, "TOP", 0, -2 - (i-1) * 20)
-        item:SetHighlightTexture("Interface\\Buttons\\WHITE8x8")
-        item:GetHighlightTexture():SetVertexColor(0.3, 0.3, 0.5, 0.5)
+    local function BuildMenu()
+        for _, child in ipairs({ menu:GetChildren() }) do
+            child:Hide()
+            child:SetParent(nil)
+        end
 
-        local itemText = item:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        itemText:SetPoint("LEFT", 8, 0)
-        itemText:SetText(opt.label)
+        menu:SetSize(110, #options * 20 + 4)
+        for i, opt in ipairs(options) do
+            local item = CreateFrame("Button", nil, menu)
+            item:SetSize(106, 18)
+            item:SetPoint("TOP", menu, "TOP", 0, -2 - (i-1) * 20)
+            item:SetHighlightTexture("Interface\\Buttons\\WHITE8x8")
+            item:GetHighlightTexture():SetVertexColor(0.3, 0.3, 0.5, 0.5)
 
-        item:SetScript("OnClick", function()
-            currentValue = opt.value
-            btnText:SetText(opt.label)
-            menu:Hide()
-            onChange(opt.value)
-        end)
+            local itemText = item:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            itemText:SetPoint("LEFT", 8, 0)
+            itemText:SetText(opt.label)
+
+            item:SetScript("OnClick", function()
+                currentValue = opt.value
+                btnText:SetText(opt.label)
+                menu:Hide()
+                onChange(opt.value)
+            end)
+        end
     end
+    BuildMenu()
 
     btn:SetScript("OnClick", function()
         if menu:IsShown() then
@@ -262,6 +273,15 @@ local function CreateDropdown(parent, label, options, currentValue, x, y, onChan
         UpdateText()
     end
 
+    btn.UpdateOptions = function(newOptions, newValue)
+        options = newOptions or options
+        if newValue ~= nil then
+            currentValue = newValue
+        end
+        BuildMenu()
+        UpdateText()
+    end
+
     return btn
 end
 
@@ -271,7 +291,7 @@ function addon.CreateConfigWindow()
     end
 
     local frame = CreateFrame("Frame", "TotemDeckConfigWindow", UIParent, "BackdropTemplate")
-    frame:SetSize(560, 360)
+    frame:SetSize(640, 560)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
     frame:SetMovable(true)
@@ -382,7 +402,35 @@ function addon.CreateConfigWindow()
     end
 
     -- Settings row with dropdowns
-    local settingsSection = CreateLayoutSection(layoutContent, "Settings", 0, 100)
+    local settingsSection = CreateLayoutSection(layoutContent, "Settings", 0, 220)
+
+    local function GetAllowedTimerPositions()
+        local dir = TotemDeckDB.popupDirection or "UP"
+        if dir == "LEFT" or dir == "RIGHT" then
+            return {
+                { label = "Left", value = "LEFT" },
+                { label = "Right", value = "RIGHT" },
+            }
+        end
+        return {
+            { label = "Above", value = "ABOVE" },
+            { label = "Below", value = "BELOW" },
+        }
+    end
+
+    local function EnsureValidTimerPosition()
+        local allowed = GetAllowedTimerPositions()
+        local current = TotemDeckDB.timerPosition or "ABOVE"
+        for _, opt in ipairs(allowed) do
+            if opt.value == current then
+                return current
+            end
+        end
+        local fallback = allowed[1] and allowed[1].value or "ABOVE"
+        TotemDeckDB.timerPosition = fallback
+        addon.RebuildTimerFrame()
+        return fallback
+    end
 
     frame.popupDirDropdown = CreateDropdown(settingsSection, "Popup Direction", {
         { label = "Up", value = "UP" },
@@ -392,14 +440,13 @@ function addon.CreateConfigWindow()
     }, TotemDeckDB.popupDirection or "UP", 10, -20, function(value)
         TotemDeckDB.popupDirection = value
         if not InCombatLockdown() then addon.RebuildPopupColumns() end
+        local validPos = EnsureValidTimerPosition()
+        if frame.timerPosDropdown and frame.timerPosDropdown.UpdateOptions then
+            frame.timerPosDropdown.UpdateOptions(GetAllowedTimerPositions(), validPos)
+        end
     end)
 
-    frame.timerPosDropdown = CreateDropdown(settingsSection, "Timer Position", {
-        { label = "Above", value = "ABOVE" },
-        { label = "Below", value = "BELOW" },
-        { label = "Left", value = "LEFT" },
-        { label = "Right", value = "RIGHT" },
-    }, TotemDeckDB.timerPosition or "ABOVE", 135, -20, function(value)
+    frame.timerPosDropdown = CreateDropdown(settingsSection, "Timer Position", GetAllowedTimerPositions(), EnsureValidTimerPosition(), 135, -20, function(value)
         TotemDeckDB.timerPosition = value
         addon.RebuildTimerFrame()
     end)
@@ -409,6 +456,14 @@ function addon.CreateConfigWindow()
         { label = "Icons", value = "icons" },
     }, TotemDeckDB.timerStyle or "bars", 260, -20, function(value)
         TotemDeckDB.timerStyle = value
+        addon.UpdateTimers()
+    end)
+
+    frame.groupBuffStyleDropdown = CreateDropdown(settingsSection, "Buff Count Style", {
+        { label = "Numbers", value = "numbers" },
+        { label = "Dots", value = "dots" },
+    }, TotemDeckDB.showGroupBuffStyle or "numbers", 10, -70, function(value)
+        TotemDeckDB.showGroupBuffStyle = value
         addon.UpdateTimers()
     end)
 
@@ -424,7 +479,7 @@ function addon.CreateConfigWindow()
     -- Scale slider
     local scaleContainer = CreateFrame("Frame", nil, settingsSection, "BackdropTemplate")
     scaleContainer:SetSize(200, 40)
-    scaleContainer:SetPoint("TOPLEFT", settingsSection, "TOPLEFT", 10, -58)
+    scaleContainer:SetPoint("TOPLEFT", settingsSection, "TOPLEFT", 260, -70)
     scaleContainer:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -462,9 +517,11 @@ function addon.CreateConfigWindow()
     end)
     frame.scaleSlider = scaleSlider
 
+    
+
 
     -- Options (full width, 2-column layout for checkboxes)
-    local optionsSection = CreateLayoutSection(layoutContent, "Options", -130, 155)
+    local optionsSection = CreateLayoutSection(layoutContent, "Options", -240, 240)
 
     -- Left column
     local showTimersCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
@@ -659,6 +716,30 @@ function addon.CreateConfigWindow()
     showTooltipsLabel:SetPoint("LEFT", showTooltipsCheck, "RIGHT", 4, 0)
     showTooltipsLabel:SetText("Show Tooltips")
     frame.showTooltipsCheck = showTooltipsCheck
+
+    local showGroupBuffCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
+    showGroupBuffCheck:SetPoint("TOPLEFT", 260, -124)
+    showGroupBuffCheck:SetChecked(TotemDeckDB.showGroupBuffCount ~= false)
+    showGroupBuffCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.showGroupBuffCount = self:GetChecked()
+        addon.UpdateTimers()
+    end)
+    local showGroupBuffLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    showGroupBuffLabel:SetPoint("LEFT", showGroupBuffCheck, "RIGHT", 4, 0)
+    showGroupBuffLabel:SetText("Show group buff count")
+    frame.showGroupBuffCheck = showGroupBuffCheck
+
+    local showMinimapCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
+    showMinimapCheck:SetPoint("TOPLEFT", 260, -148)
+    showMinimapCheck:SetChecked(TotemDeckDB.showMinimapButton ~= false)
+    showMinimapCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.showMinimapButton = self:GetChecked()
+        addon.UpdateMinimapButton()
+    end)
+    local showMinimapLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    showMinimapLabel:SetPoint("LEFT", showMinimapCheck, "RIGHT", 4, 0)
+    showMinimapLabel:SetText("Show minimap button")
+    frame.showMinimapCheck = showMinimapCheck
 
     --------------------------
     -- ORDERING TAB
@@ -1335,15 +1416,37 @@ local function RefreshConfigWindowState()
     if not configWindow then return end
 
     local popupDir = TotemDeckDB.popupDirection or "UP"
-    local popupDirValues = { "UP", "DOWN", "LEFT", "RIGHT" }
-    for i, btn in ipairs(configWindow.popupDirButtons or {}) do
-        btn:SetChecked(popupDirValues[i] == popupDir)
+    if configWindow.popupDirDropdown and configWindow.popupDirDropdown.UpdateValue then
+        configWindow.popupDirDropdown.UpdateValue(popupDir)
     end
 
-    local timerPos = TotemDeckDB.timerPosition or "ABOVE"
-    local timerPosValues = { "ABOVE", "BELOW", "LEFT", "RIGHT" }
-    for i, btn in ipairs(configWindow.timerPosButtons or {}) do
-        btn:SetChecked(timerPosValues[i] == timerPos)
+    if configWindow.timerPosDropdown and configWindow.timerPosDropdown.UpdateOptions then
+        local allowed
+        if popupDir == "LEFT" or popupDir == "RIGHT" then
+            allowed = {
+                { label = "Left", value = "LEFT" },
+                { label = "Right", value = "RIGHT" },
+            }
+        else
+            allowed = {
+                { label = "Above", value = "ABOVE" },
+                { label = "Below", value = "BELOW" },
+            }
+        end
+
+        local timerPos = TotemDeckDB.timerPosition or (allowed[1] and allowed[1].value) or "ABOVE"
+        local valid = false
+        for _, opt in ipairs(allowed) do
+            if opt.value == timerPos then
+                valid = true
+                break
+            end
+        end
+        if not valid then
+            timerPos = allowed[1] and allowed[1].value or "ABOVE"
+            TotemDeckDB.timerPosition = timerPos
+        end
+        configWindow.timerPosDropdown.UpdateOptions(allowed, timerPos)
     end
 
     if configWindow.showTimersCheck then
@@ -1377,6 +1480,15 @@ local function RefreshConfigWindowState()
     end
     if configWindow.showTooltipsCheck then
         configWindow.showTooltipsCheck:SetChecked(TotemDeckDB.showTooltips ~= false)
+    end
+    if configWindow.groupBuffStyleDropdown and configWindow.groupBuffStyleDropdown.UpdateValue then
+        configWindow.groupBuffStyleDropdown.UpdateValue(TotemDeckDB.showGroupBuffStyle or "numbers")
+    end
+    if configWindow.showGroupBuffCheck then
+        configWindow.showGroupBuffCheck:SetChecked(TotemDeckDB.showGroupBuffCount ~= false)
+    end
+    if configWindow.showMinimapCheck then
+        configWindow.showMinimapCheck:SetChecked(TotemDeckDB.showMinimapButton ~= false)
     end
     -- Sounds tab
     if configWindow.masterSoundCheck then
