@@ -39,18 +39,149 @@ function addon.CreateTimerBar(parent, element, index)
     local text = statusBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     text:SetPoint("LEFT", 4, 0)
     text:SetTextColor(1, 1, 1)
+    local fontFile, fontSize = GameFontNormalSmall:GetFont()
+    text:SetFont(fontFile, (fontSize or 10) + 1, "OUTLINE")
     bar.text = text
 
     -- Time text (on statusBar so it renders above the progress color)
     local timeText = statusBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     timeText:SetPoint("RIGHT", -2, 0)
     timeText:SetTextColor(1, 1, 1)
+    timeText:SetFont(fontFile, (fontSize or 10) + 1, "OUTLINE")
     bar.timeText = timeText
 
     bar.element = element
     bar:Hide()
 
     return bar
+end
+
+local function StartBarFlash(bar)
+    if bar.flashOn then return end
+    bar.flashOn = true
+    bar.flashStart = GetTime()
+    bar:SetScript("OnUpdate", function(self)
+        local t = GetTime() - (self.flashStart or 0)
+        local phase = math.abs(math.sin(t * 6))
+        self:SetAlpha(0.3 + 0.7 * phase)
+    end)
+end
+
+local function StopBarFlash(bar)
+    if not bar.flashOn then return end
+    bar.flashOn = false
+    bar:SetScript("OnUpdate", nil)
+    bar:SetAlpha(1)
+end
+
+local function StartIconFlash(btn)
+    if not btn or not btn.iconTimer or btn.iconFlashOn then return end
+    btn.iconFlashOn = true
+    btn.iconFlashStart = GetTime()
+    btn.iconTimer:SetScript("OnUpdate", function()
+        local t = GetTime() - (btn.iconFlashStart or 0)
+        local phase = math.abs(math.sin(t * 6))
+        local alpha = 0.3 + 0.7 * phase
+        btn.icon:SetAlpha(alpha)
+        btn.iconTimer:SetAlpha(alpha)
+        if btn.iconTimerDots then
+            btn.iconTimerDots:SetAlpha(alpha)
+        end
+    end)
+end
+
+local function StopIconFlash(btn)
+    if not btn or not btn.iconTimer or not btn.iconFlashOn then return end
+    btn.iconFlashOn = false
+    btn.iconTimer:SetScript("OnUpdate", nil)
+    btn.iconTimer:SetAlpha(1)
+    btn.icon:SetAlpha(1)
+    if btn.iconTimerDots then
+        btn.iconTimerDots:SetAlpha(1)
+    end
+end
+
+local DOT_SIZE = 11
+local DOT_SPACING = -3
+local DOT_POSITIONS = {
+    [1] = { x = -1, y = 1 },
+    [2] = { x = 0, y = 1 },
+    [3] = { x = 1, y = 1 },
+    [4] = { x = -1, y = 0 },
+    [5] = { x = 0, y = 0 },
+    [6] = { x = 1, y = 0 },
+    [7] = { x = -1, y = -1 },
+    [8] = { x = 0, y = -1 },
+    [9] = { x = 1, y = -1 },
+}
+
+local DICE_PIPS = {
+    [0] = {},
+    [1] = { 5 },
+    [2] = { 1, 9 },
+    [3] = { 1, 5, 9 },
+    [4] = { 1, 3, 7, 9 },
+    [5] = { 1, 3, 5, 7, 9 },
+    [6] = { 1, 3, 4, 6, 7, 9 },
+}
+
+local function EnsureIconDotGrid(btn)
+    if not btn or not btn.iconTimerDots then return end
+    if btn.iconTimerDots.gridBuilt then return end
+
+    btn.iconTimerDots.dots = {}
+    for i = 1, 9 do
+        local tex = btn.iconTimerDots:CreateTexture(nil, "OVERLAY")
+        tex:SetSize(DOT_SIZE, DOT_SIZE)
+        local pos = DOT_POSITIONS[i]
+        tex:SetPoint("CENTER", btn.iconTimerDots, "CENTER", pos.x * (DOT_SIZE + DOT_SPACING), pos.y * (DOT_SIZE + DOT_SPACING))
+        tex:Hide()
+        btn.iconTimerDots.dots[i] = tex
+    end
+    btn.iconTimerDots.gridBuilt = true
+end
+
+local function UpdateIconDots(btn, buffed, total)
+    if not btn or not btn.iconTimerDots then return end
+    EnsureIconDotGrid(btn)
+
+    if not buffed or not total or total <= 0 then
+        btn.iconTimerDots:Hide()
+        return
+    end
+
+    local totalPips = DICE_PIPS[math.min(total, 6)] or {}
+    local buffedPips = DICE_PIPS[math.min(buffed, 6)] or {}
+    local buffedMap = {}
+    for _, idx in ipairs(buffedPips) do
+        buffedMap[idx] = true
+    end
+
+    for i = 1, 9 do
+        local tex = btn.iconTimerDots.dots[i]
+        if tex then
+            tex:Hide()
+        end
+    end
+
+    for _, idx in ipairs(totalPips) do
+        local tex = btn.iconTimerDots.dots[idx]
+        if tex then
+            if buffedMap[idx] then
+                tex:SetTexture("Interface\\COMMON\\Indicator-Green")
+            else
+                tex:SetTexture("Interface\\COMMON\\Indicator-Gray")
+            end
+            tex:Show()
+        end
+    end
+
+    btn.iconTimerDots:Show()
+end
+
+local function HideIconDots(btn)
+    if not btn or not btn.iconTimerDots then return end
+    btn.iconTimerDots:Hide()
 end
 
 -- Create timer frame (position based on timerPosition setting)
@@ -136,6 +267,14 @@ function addon.UpdateTimers()
                 if remaining > 0 then
                     anyActive = true
 
+                    if startTime and addon.state.totemLastStart[slot] ~= startTime then
+                        addon.state.totemLastStart[slot] = startTime
+                        if btn and btn.iconPulse then
+                            btn.iconPulse:Stop()
+                            btn.iconPulse:Play()
+                        end
+                    end
+
                     -- Totem expiry sound alert
                     if remaining <= 5 then
                         if TotemDeckDB.totemExpirySound and not addon.state.totemSoundPlayed[slot] then
@@ -150,6 +289,16 @@ function addon.UpdateTimers()
                         addon.state.totemSoundPlayed[slot] = false
                     end
 
+                    local expiringWindow = 10
+                    local expiringProgress = 0
+                    if remaining <= expiringWindow then
+                        expiringProgress = (expiringWindow - remaining) / expiringWindow
+                    end
+                    local isExpiring = remaining <= 5
+                    local red = 1
+                    local green = 1 - (0.8 * expiringProgress)
+                    local blue = 1 - (0.8 * expiringProgress)
+
                     -- Update bar timer (bars mode)
                     if bar and timerStyle == "bars" then
                         bar:Show()
@@ -157,22 +306,77 @@ function addon.UpdateTimers()
                         bar.statusBar:SetValue(remaining)
                         -- totemName may be nil in some WoW versions
                         if totemName then
-                            bar.text:SetText(totemName:gsub(" Totem", ""))
+                            local baseTotemName = totemName:gsub("%s+[IVXLCDM]+$", "")
+                            bar.text:SetText(baseTotemName:gsub(" Totem", ""))
                         else
                             bar.text:SetText(element)
                         end
-                        bar.timeText:SetText(FormatTime(math.floor(remaining)))
+                        local timeText = FormatTime(math.floor(remaining))
+                        if TotemDeckDB.showGroupBuffCount ~= false then
+                            local totemIdentifier = activeSpellID or totemName
+                            local buffed, total = addon.GetGroupTotemBuffCount(totemIdentifier)
+                            local buffText, wrap = addon.FormatGroupBuffCount(buffed, total)
+                            if buffText then
+                                if not wrap and timerStyle == "bars" then
+                                    buffText = buffText:gsub("\n", "")
+                                end
+                                if wrap then
+                                    timeText = timeText .. " (" .. buffText .. ")"
+                                else
+                                    timeText = timeText .. " " .. buffText
+                                end
+                            end
+                        end
+                        bar.timeText:SetText(timeText)
+
+                        bar.timeText:SetTextColor(red, green, blue)
+
+                        if isExpiring then
+                            StartBarFlash(bar)
+                        else
+                            StopBarFlash(bar)
+                        end
                     elseif bar then
                         bar:Hide()
+                        StopBarFlash(bar)
                     end
 
                     -- Update icon timer (icons mode)
                     if btn and btn.iconTimer then
                         if timerStyle == "icons" and showTimers then
-                            btn.iconTimerText:SetText(FormatTime(math.floor(remaining)))
+                            local timeText = FormatTime(math.floor(remaining))
+                            local buffed, total = nil, nil
+                            if TotemDeckDB.showGroupBuffCount ~= false then
+                                local totemIdentifier = activeSpellID or totemName
+                                buffed, total = addon.GetGroupTotemBuffCount(totemIdentifier)
+                            end
+
+                            if TotemDeckDB.showGroupBuffStyle == "dots" and TotemDeckDB.showGroupBuffCount ~= false then
+                                UpdateIconDots(btn, buffed, total)
+                            else
+                                local buffText, wrap = addon.FormatGroupBuffCount(buffed, total)
+                                if buffText then
+                                    if wrap then
+                                        timeText = timeText .. " (" .. buffText .. ")"
+                                    else
+                                        timeText = timeText .. " " .. buffText
+                                    end
+                                end
+                                HideIconDots(btn)
+                            end
+
+                            btn.iconTimerText:SetText(timeText)
+                            btn.iconTimerText:SetTextColor(red, green, blue)
                             btn.iconTimer:Show()
+                            if isExpiring then
+                                StartIconFlash(btn)
+                            else
+                                StopIconFlash(btn)
+                            end
                         else
                             btn.iconTimer:Hide()
+                            HideIconDots(btn)
+                            StopIconFlash(btn)
                         end
                     end
 
@@ -226,7 +430,12 @@ function addon.UpdateTimers()
                     end
                 else
                     if bar then bar:Hide() end
+                    if bar then StopBarFlash(bar) end
                     if btn and btn.iconTimer then btn.iconTimer:Hide() end
+                    if btn then HideIconDots(btn) end
+                    if btn then StopIconFlash(btn) end
+                    if bar and bar.timeText then bar.timeText:SetTextColor(1, 1, 1) end
+                    if btn and btn.iconTimerText then btn.iconTimerText:SetTextColor(1, 1, 1) end
                     -- Revert button display when totem expires
                     if btn and btn.showingPlaced then
                         local activeIcon = addon.GetTotemIcon(activeSpellID)
@@ -246,7 +455,12 @@ function addon.UpdateTimers()
                 end
             else
                 if bar then bar:Hide() end
+                if bar then StopBarFlash(bar) end
                 if btn and btn.iconTimer then btn.iconTimer:Hide() end
+                if btn then HideIconDots(btn) end
+                if btn then StopIconFlash(btn) end
+                if bar and bar.timeText then bar.timeText:SetTextColor(1, 1, 1) end
+                if btn and btn.iconTimerText then btn.iconTimerText:SetTextColor(1, 1, 1) end
                 -- Revert button display when no totem placed
                 if btn and btn.showingPlaced then
                     local activeIcon = addon.GetTotemIcon(activeSpellID)
