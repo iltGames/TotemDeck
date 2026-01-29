@@ -99,6 +99,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
             end
         end
 
+        -- Force dots-only group buff style
+        TotemDeckDB.showGroupBuffStyle = "dots"
+
         -- Migration: Convert old string-based active totems to spell IDs
         if type(TotemDeckDB.activeEarth) == "string" then
             TotemDeckDB.activeEarth = MigrateTotemNameToID(TotemDeckDB.activeEarth) or defaults.activeEarth
@@ -175,6 +178,7 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
         addon.CreateActionBarFrame()
         addon.CreateTimerFrame()
         addon.SetupPopupSystem()
+        addon.CreateMinimapButton()
 
         -- Show popup if always show is enabled
         if TotemDeckDB.alwaysShowPopup then
@@ -307,7 +311,7 @@ timerUpdateFrame:SetScript("OnUpdate", function(self, delta)
             addon.UpdateTimers()
         end
         -- Update weapon buff timer
-        if addon.UI.weaponBuffButton then
+        if addon.UI and addon.UI.weaponBuffButton then
             addon.UpdateWeaponBuffButton()
         end
     end

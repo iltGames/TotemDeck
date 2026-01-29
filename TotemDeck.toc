@@ -14,5 +14,6 @@ UI/Timers.lua
 UI/Reincarnation.lua
 UI/WeaponBuff.lua
 UI/Config.lua
+UI/Minimap.lua
 Events.lua
 Commands.lua
