@@ -459,14 +459,6 @@ function addon.CreateConfigWindow()
         addon.UpdateTimers()
     end)
 
-    frame.groupBuffStyleDropdown = CreateDropdown(settingsSection, "Buff Count Style", {
-        { label = "Numbers", value = "numbers" },
-        { label = "Dots", value = "dots" },
-    }, TotemDeckDB.showGroupBuffStyle or "numbers", 10, -70, function(value)
-        TotemDeckDB.showGroupBuffStyle = value
-        addon.UpdateTimers()
-    end)
-
     frame.popupModDropdown = CreateDropdown(settingsSection, "Popup Modifier", {
         { label = "None", value = "NONE" },
         { label = "Shift", value = "SHIFT" },
@@ -1480,9 +1472,6 @@ local function RefreshConfigWindowState()
     end
     if configWindow.showTooltipsCheck then
         configWindow.showTooltipsCheck:SetChecked(TotemDeckDB.showTooltips ~= false)
-    end
-    if configWindow.groupBuffStyleDropdown and configWindow.groupBuffStyleDropdown.UpdateValue then
-        configWindow.groupBuffStyleDropdown.UpdateValue(TotemDeckDB.showGroupBuffStyle or "numbers")
     end
     if configWindow.showGroupBuffCheck then
         configWindow.showGroupBuffCheck:SetChecked(TotemDeckDB.showGroupBuffCount ~= false)

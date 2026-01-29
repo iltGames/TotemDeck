@@ -99,6 +99,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
             end
         end
 
+        -- Force dots-only group buff style
+        TotemDeckDB.showGroupBuffStyle = "dots"
+
         -- Migration: Convert old string-based active totems to spell IDs
         if type(TotemDeckDB.activeEarth) == "string" then
             TotemDeckDB.activeEarth = MigrateTotemNameToID(TotemDeckDB.activeEarth) or defaults.activeEarth

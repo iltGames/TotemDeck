@@ -41,7 +41,7 @@ addon.defaults = {
     disablePopupInCombat = false, -- Completely disable popup bars in combat (not just hide)
     showTooltips = true, -- Show tooltips on hover
     showGroupBuffCount = true, -- Show group buff count next to timers/tooltips
-    showGroupBuffStyle = "numbers", -- "numbers" or "dots"
+    showGroupBuffStyle = "dots", -- "dots" only
     showMinimapButton = true, -- Show minimap button
     minimapButtonPos = 220, -- Angle in degrees
     totemExpirySound = true, -- Master enable/disable expiry sounds
@@ -256,7 +256,7 @@ end
 function addon.GetTotemBySpellID(spellID)
     for element, totems in pairs(addon.TOTEMS) do
         for _, totem in ipairs(totems) do
-            if totem.spellID == spellID then
+            if totem.spellID == spellID then2
                 return totem, element
             end
         end
@@ -470,7 +470,7 @@ function addon.FormatGroupBuffCount(buffed, total)
         return nil
     end
 
-    local style = TotemDeckDB and TotemDeckDB.showGroupBuffStyle or "numbers"
+    local style = TotemDeckDB and TotemDeckDB.showGroupBuffStyle or "dots"
     if style == "dots" then
         local filledDot = "|TInterface\\COMMON\\Indicator-Green:16:16:0:0|t"
         local emptyDot = "|TInterface\\COMMON\\Indicator-Gray:16:16:0:0|t"
