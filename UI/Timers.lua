@@ -223,6 +223,11 @@ function addon.UpdateTimers()
                         else
                             btn.icon:SetAlpha(1.0)
                         end
+
+                        -- Hide mana overlay when totem is active
+                        if btn.manaOverlay then
+                            btn.manaOverlay:Hide()
+                        end
                     end
                 else
                     if bar then bar:Hide() end
@@ -243,6 +248,19 @@ function addon.UpdateTimers()
                     if btn then
                         btn.icon:SetAlpha(1.0)
                     end
+                    -- Check mana for blue overlay when totem expired
+                    if btn and btn.manaOverlay then
+                        if TotemDeckDB.showLowManaOverlay then
+                            local hasEnoughMana = addon.HasManaForTotem(activeSpellID)
+                            if not hasEnoughMana then
+                                btn.manaOverlay:Show()
+                            else
+                                btn.manaOverlay:Hide()
+                            end
+                        else
+                            btn.manaOverlay:Hide()
+                        end
+                    end
                 end
             else
                 if bar then bar:Hide() end
@@ -262,6 +280,19 @@ function addon.UpdateTimers()
                 -- Reset alpha when no totem placed
                 if btn then
                     btn.icon:SetAlpha(1.0)
+                end
+                -- Check mana for blue overlay when no totem is placed
+                if btn and btn.manaOverlay then
+                    if TotemDeckDB.showLowManaOverlay then
+                        local hasEnoughMana = addon.HasManaForTotem(activeSpellID)
+                        if not hasEnoughMana then
+                            btn.manaOverlay:Show()
+                        else
+                            btn.manaOverlay:Hide()
+                        end
+                    else
+                        btn.manaOverlay:Hide()
+                    end
                 end
             end
         end

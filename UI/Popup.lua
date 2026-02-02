@@ -152,7 +152,6 @@ function addon.ShowPopup(hoveredElement)
         local color = ELEMENT_COLORS[elem]
         if not InCombatLockdown() then
             container:Show() -- Only call Show() outside combat (secure frame restriction)
-            container:SetFrameStrata("DIALOG") -- Use DIALOG so GameTooltip (TOOLTIP strata) is above
             -- EnableMouse is protected on secure frames, only call outside combat
             container:EnableMouse(true)
             for _, btn in ipairs(popupButtons[elem] or {}) do
@@ -240,7 +239,6 @@ function addon.HidePopup()
             container:SetAlpha(0)
         else
             -- Out of combat: actually hide for clean mouse passthrough
-            container:SetFrameStrata("BACKGROUND")
             container:EnableMouse(false)
             -- Disable mouse on all popup buttons for click-through
             for _, btn in ipairs(popupButtons[elem] or {}) do
@@ -331,7 +329,7 @@ function addon.CreatePopupColumn(element, anchorButton)
         container:SetPoint("LEFT", anchorButton, "RIGHT", 2, 0)
     end
 
-    container:SetFrameStrata("BACKGROUND") -- Start low, raised when shown
+    container:SetFrameStrata("DIALOG") -- Keep at DIALOG so popup is always above timer bars during combat
 
     container:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",

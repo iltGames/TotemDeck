@@ -73,6 +73,35 @@ local function MigrateTotemListToIDs(list)
     return migrated
 end
 
+-- Update mana overlays when player mana changes
+-- This runs independently of the timer update to ensure overlays respond to mana changes
+function addon.UpdateManaOverlays()
+    if not TotemDeckDB.showLowManaOverlay then return end
+    if not addon.UI.activeTotemButtons then return end
+
+    local TOTEM_SLOTS = addon.TOTEM_SLOTS
+    for _, element in ipairs(ELEMENT_ORDER) do
+        local btn = addon.UI.activeTotemButtons[element]
+        if btn and btn.manaOverlay then
+            local slot = TOTEM_SLOTS[element]
+            local haveTotem = GetTotemInfo(slot)
+
+            -- Only show overlay if no active totem
+            if not haveTotem then
+                local activeSpellID = TotemDeckDB["active" .. element]
+                local hasEnoughMana = addon.HasManaForTotem(activeSpellID)
+                if hasEnoughMana then
+                    btn.manaOverlay:Hide()
+                else
+                    btn.manaOverlay:Show()
+                end
+            else
+                btn.manaOverlay:Hide()
+            end
+        end
+    end
+end
+
 -- Event frame
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
@@ -86,6 +115,7 @@ eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN") -- For Reincarnation cooldown
 eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED") -- For detecting weapon buff casts
 eventFrame:RegisterEvent("UNIT_SPELLCAST_START") -- For tracking pre-cast enchant state
 eventFrame:RegisterEvent("UNIT_AURA") -- For out-of-range detection via buff checking
+eventFrame:RegisterEvent("UNIT_POWER_UPDATE") -- For mana overlay updates
 
 eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
     if event == "ADDON_LOADED" and arg1 == addonName then
@@ -196,7 +226,6 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
             addon.state.popupVisible = false
             for elem, container in pairs(addon.UI.popupContainers) do
                 container:SetAlpha(0)
-                container:SetFrameStrata("BACKGROUND")
                 container:EnableMouse(false)
                 -- Disable mouse on all popup buttons
                 for _, btn in ipairs(addon.UI.popupButtons[elem] or {}) do
@@ -212,7 +241,6 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
                 if not container:IsShown() then
                     container:Show()
                     container:SetAlpha(0)
-                    container:SetFrameStrata("BACKGROUND")
                 end
                 -- Ensure mouse is enabled on all buttons (may have been disabled from HidePopup)
                 container:EnableMouse(true)
@@ -291,6 +319,12 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
             if spellName then
                 addon.OnWeaponBuffCast(spellName)
             end
+        end
+
+    elseif event == "UNIT_POWER_UPDATE" then
+        -- Update mana overlays when player mana changes
+        if arg1 == "player" and arg2 == "MANA" then
+            addon.UpdateManaOverlays()
         end
     end
 end)

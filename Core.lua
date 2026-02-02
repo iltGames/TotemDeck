@@ -40,6 +40,7 @@ addon.defaults = {
     barScale = 1.0, -- Scale factor for the action bar
     disablePopupInCombat = false, -- Completely disable popup bars in combat (not just hide)
     showTooltips = true, -- Show tooltips on hover
+    showLowManaOverlay = true, -- Show blue overlay when low mana and no active totem
     totemExpirySound = true, -- Master enable/disable expiry sounds
     totemExpirySoundIDs = { -- Per-element sound IDs (0 = None)
         Earth = 8959,
@@ -366,6 +367,22 @@ function addon.HasTotemBuff(totemIdentifier)
         end
     end
     return false
+end
+
+-- Check if player has enough mana to cast a totem by spell ID
+function addon.HasManaForTotem(spellID)
+    if not spellID then return true end
+    -- Get the spell name to check the trained (max) rank
+    local spellName = GetSpellInfo(spellID)
+    if not spellName then return true end
+    -- IsUsableSpell checks the highest trained rank and returns (usable, noMana)
+    local usable, noMana = IsUsableSpell(spellName)
+    -- If noMana is true, player doesn't have enough mana
+    if noMana then
+        return false
+    end
+    -- If usable is false but not due to mana, still consider mana sufficient
+    return true
 end
 
 -- Check if a weapon buff spell is known (accepts spell ID)

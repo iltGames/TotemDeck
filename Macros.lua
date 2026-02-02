@@ -30,7 +30,15 @@ local function DeleteMacroIfExists(macroName)
 end
 
 -- Create or update macros for active totems
+-- Returns: success (boolean), message (string)
 function addon.CreateTotemMacros()
+    -- Protected APIs (CreateMacro, EditMacro) fail silently in combat
+    if InCombatLockdown() then
+        return false, "Cannot create macros during combat"
+    end
+
+    local created, updated, skipped = 0, 0, 0
+
     for _, element in ipairs(ELEMENT_ORDER) do
         local macroName = "TD" .. element
 
@@ -61,13 +69,15 @@ function addon.CreateTotemMacros()
             if macroIndex > 0 then
                 -- Update existing macro
                 EditMacro(macroIndex, macroName, macroIcon, macroBody)
+                updated = updated + 1
             else
                 -- Create new macro (account-wide)
                 local numAccountMacros = GetNumMacros()
                 if numAccountMacros < 120 then
                     CreateMacro(macroName, macroIcon, macroBody, false)
+                    created = created + 1
                 else
-                    -- Macro limit reached, silently skip
+                    skipped = skipped + 1
                 end
             end
         end
@@ -94,16 +104,29 @@ function addon.CreateTotemMacros()
         local sequenceIndex = GetMacroIndexByName(sequenceName)
         if sequenceIndex > 0 then
             EditMacro(sequenceIndex, sequenceName, sequenceIcon, sequenceBody)
+            updated = updated + 1
         else
             local numAccountMacros = GetNumMacros()
             if numAccountMacros < 120 then
                 CreateMacro(sequenceName, sequenceIcon, sequenceBody, false)
+                created = created + 1
+            else
+                skipped = skipped + 1
             end
         end
     end
 
     -- Also create/update custom macros
-    addon.UpdateCustomMacros()
+    local customCreated, customUpdated, customSkipped = addon.UpdateCustomMacros()
+    created = created + customCreated
+    updated = updated + customUpdated
+    skipped = skipped + customSkipped
+
+    if skipped > 0 then
+        return true, string.format("Updated %d, created %d macros (%d skipped - macro limit)", updated, created, skipped)
+    else
+        return true, string.format("Updated %d, created %d macros", updated, created)
+    end
 end
 
 -- Update a single macro when active totem changes
@@ -156,8 +179,10 @@ function addon.UpdateTotemMacro(element)
 end
 
 -- Create or update all custom macros from templates
+-- Returns: created, updated, skipped counts
 function addon.UpdateCustomMacros()
-    if not TotemDeckDB.customMacros then return end
+    local created, updated, skipped = 0, 0, 0
+    if not TotemDeckDB.customMacros then return created, updated, skipped end
 
     for _, customMacro in ipairs(TotemDeckDB.customMacros) do
         if customMacro.enabled and customMacro.name and customMacro.template then
@@ -168,14 +193,19 @@ function addon.UpdateCustomMacros()
             local macroIndex = GetMacroIndexByName(macroName)
             if macroIndex > 0 then
                 EditMacro(macroIndex, macroName, macroIcon, macroBody)
+                updated = updated + 1
             else
                 local numAccountMacros = GetNumMacros()
                 if numAccountMacros < 120 then
                     CreateMacro(macroName, macroIcon, macroBody, false)
+                    created = created + 1
+                else
+                    skipped = skipped + 1
                 end
             end
         end
     end
+    return created, updated, skipped
 end
 
 -- Delete a custom macro

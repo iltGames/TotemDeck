@@ -260,8 +260,7 @@ function addon.CreateWeaponBuffButton(isVertical)
                     GameTooltip:SetText(self.buffName, 1, 1, 1)
                 end
                 GameTooltip:AddLine(" ")
-                GameTooltip:AddLine("Left-click: Apply to main hand", 0.5, 0.5, 0.5)
-                GameTooltip:AddLine("Right-click: Apply to off-hand", 0.5, 0.5, 0.5)
+                GameTooltip:AddLine("Click to apply to weapon", 0.5, 0.5, 0.5)
                 GameTooltip:Show()
             end
         end)
@@ -331,8 +330,7 @@ function addon.CreateWeaponBuffButton(isVertical)
                 GameTooltip:AddLine("Off Hand: None", 0.5, 0.5, 0.5)
             end
             GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("Left-click: Apply to main hand", 0.5, 0.5, 0.5)
-            GameTooltip:AddLine("Right-click: Apply to off-hand", 0.5, 0.5, 0.5)
+            GameTooltip:AddLine("Click to apply to weapon", 0.5, 0.5, 0.5)
             GameTooltip:Show()
         end
     end)

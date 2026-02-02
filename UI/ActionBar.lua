@@ -110,6 +110,14 @@ function addon.CreateActionBarFrame()
         end
         btn.icon = icon
 
+        -- Blue mana overlay (shown when low mana and no active totem)
+        local manaOverlay = btn:CreateTexture(nil, "OVERLAY", nil, 1)
+        manaOverlay:SetSize(36, 36)
+        manaOverlay:SetPoint("CENTER")
+        manaOverlay:SetColorTexture(0.1, 0.3, 0.8, 0.5)  -- Blue with 50% alpha
+        manaOverlay:Hide()
+        btn.manaOverlay = manaOverlay
+
         -- Register for clicks BEFORE setting attributes
         btn:RegisterForClicks("AnyDown", "AnyUp")
 

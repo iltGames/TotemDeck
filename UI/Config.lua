@@ -516,7 +516,6 @@ function addon.CreateConfigWindow()
                     container:Hide()
                 else
                     container:SetAlpha(0)
-                    container:SetFrameStrata("BACKGROUND")
                 end
             end
             -- Re-enable "Disable Popup in Combat" option
@@ -659,6 +658,18 @@ function addon.CreateConfigWindow()
     showTooltipsLabel:SetPoint("LEFT", showTooltipsCheck, "RIGHT", 4, 0)
     showTooltipsLabel:SetText("Show Tooltips")
     frame.showTooltipsCheck = showTooltipsCheck
+
+    local showOOMOverlayCheck = CreateFrame("CheckButton", nil, optionsSection, "UICheckButtonTemplate")
+    showOOMOverlayCheck:SetPoint("TOPLEFT", 260, -124)
+    showOOMOverlayCheck:SetChecked(TotemDeckDB.showLowManaOverlay ~= false)
+    showOOMOverlayCheck:SetScript("OnClick", function(self)
+        TotemDeckDB.showLowManaOverlay = self:GetChecked()
+        addon.UpdateManaOverlays()
+    end)
+    local showOOMOverlayLabel = optionsSection:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    showOOMOverlayLabel:SetPoint("LEFT", showOOMOverlayCheck, "RIGHT", 4, 0)
+    showOOMOverlayLabel:SetText("Show Low Mana Overlay")
+    frame.showOOMOverlayCheck = showOOMOverlayCheck
 
     --------------------------
     -- ORDERING TAB
@@ -1021,8 +1032,12 @@ function addon.CreateConfigWindow()
     macrosBtn:SetPoint("TOPLEFT", 10, -76)
     macrosBtn:SetText("Recreate Macros")
     macrosBtn:SetScript("OnClick", function()
-        addon.CreateTotemMacros()
-        print("|cFF00FF00TotemDeck:|r Macros recreated")
+        local success, message = addon.CreateTotemMacros()
+        if success then
+            print("|cFF00FF00TotemDeck:|r " .. message)
+        else
+            print("|cFFFF0000TotemDeck:|r " .. message)
+        end
     end)
 
     -- Custom Macros Section
@@ -1377,6 +1392,9 @@ local function RefreshConfigWindowState()
     end
     if configWindow.showTooltipsCheck then
         configWindow.showTooltipsCheck:SetChecked(TotemDeckDB.showTooltips ~= false)
+    end
+    if configWindow.showOOMOverlayCheck then
+        configWindow.showOOMOverlayCheck:SetChecked(TotemDeckDB.showLowManaOverlay ~= false)
     end
     -- Sounds tab
     if configWindow.masterSoundCheck then
