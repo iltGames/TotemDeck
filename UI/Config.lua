@@ -394,21 +394,131 @@ function addon.CreateConfigWindow()
         if not InCombatLockdown() then addon.RebuildPopupColumns() end
     end)
 
-    frame.timerPosDropdown = CreateDropdown(settingsSection, "Timer Position", {
-        { label = "Above", value = "ABOVE" },
-        { label = "Below", value = "BELOW" },
-        { label = "Left", value = "LEFT" },
-        { label = "Right", value = "RIGHT" },
-    }, TotemDeckDB.timerPosition or "ABOVE", 135, -20, function(value)
-        TotemDeckDB.timerPosition = value
-        addon.RebuildTimerFrame()
-    end)
+    -- Helper function to get timer position options based on style
+    local function GetTimerPositionOptions(style)
+        local options = {
+            { label = "Above", value = "ABOVE" },
+            { label = "Below", value = "BELOW" },
+            { label = "Left", value = "LEFT" },
+            { label = "Right", value = "RIGHT" },
+        }
+        if style == "icons" then
+            table.insert(options, { label = "On Button", value = "ON" })
+        end
+        return options
+    end
+
+    -- Helper to rebuild timer position dropdown
+    local function RebuildTimerPosDropdown(style)
+        if frame.timerPosDropdownContainer then
+            frame.timerPosDropdownContainer:Hide()
+            frame.timerPosDropdownContainer:SetParent(nil)
+        end
+
+        local currentPos = TotemDeckDB.timerPosition or "ABOVE"
+        -- If "ON" is selected but we're switching to bars, reset to "ABOVE"
+        if style == "bars" and currentPos == "ON" then
+            currentPos = "ABOVE"
+            TotemDeckDB.timerPosition = currentPos
+            addon.RebuildTimerFrame()
+        end
+
+        local container = CreateFrame("Frame", nil, settingsSection)
+        container:SetSize(120, 40)
+        container:SetPoint("TOPLEFT", settingsSection, "TOPLEFT", 135, -20)
+
+        local labelText = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        labelText:SetPoint("TOPLEFT", 0, 0)
+        labelText:SetText("Timer Position")
+        labelText:SetTextColor(1, 0.82, 0)
+
+        local options = GetTimerPositionOptions(style)
+
+        local btn = CreateFrame("Button", nil, container, "BackdropTemplate")
+        btn:SetSize(110, 22)
+        btn:SetPoint("TOPLEFT", 0, -14)
+        btn:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        btn:SetBackdropColor(0.1, 0.1, 0.1, 1)
+        btn:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+
+        local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        btnText:SetPoint("LEFT", 8, 0)
+        btn.text = btnText
+
+        local arrow = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        arrow:SetPoint("RIGHT", -6, 0)
+        arrow:SetText("v")
+
+        local function UpdateText()
+            for _, opt in ipairs(options) do
+                if opt.value == currentPos then
+                    btnText:SetText(opt.label)
+                    return
+                end
+            end
+            btnText:SetText(options[1].label)
+        end
+        UpdateText()
+
+        local menu = CreateFrame("Frame", nil, btn, "BackdropTemplate")
+        menu:SetPoint("TOP", btn, "BOTTOM", 0, -2)
+        menu:SetSize(110, #options * 20 + 4)
+        menu:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        menu:SetBackdropColor(0.15, 0.15, 0.15, 1)
+        menu:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+        menu:SetFrameStrata("TOOLTIP")
+        menu:Hide()
+
+        for i, opt in ipairs(options) do
+            local item = CreateFrame("Button", nil, menu)
+            item:SetSize(106, 18)
+            item:SetPoint("TOP", menu, "TOP", 0, -2 - (i-1) * 20)
+            item:SetHighlightTexture("Interface\\Buttons\\WHITE8x8")
+            item:GetHighlightTexture():SetVertexColor(0.3, 0.3, 0.5, 0.5)
+
+            local itemText = item:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            itemText:SetPoint("LEFT", 8, 0)
+            itemText:SetText(opt.label)
+
+            item:SetScript("OnClick", function()
+                currentPos = opt.value
+                TotemDeckDB.timerPosition = opt.value
+                btnText:SetText(opt.label)
+                menu:Hide()
+                addon.RebuildTimerFrame()
+            end)
+        end
+
+        btn:SetScript("OnClick", function()
+            if menu:IsShown() then
+                menu:Hide()
+            else
+                menu:Show()
+            end
+        end)
+
+        frame.timerPosDropdownContainer = container
+        frame.timerPosDropdown = btn
+    end
+
+    -- Initial build of timer position dropdown
+    RebuildTimerPosDropdown(TotemDeckDB.timerStyle or "bars")
 
     frame.timerStyleDropdown = CreateDropdown(settingsSection, "Timer Style", {
         { label = "Bars", value = "bars" },
         { label = "Icons", value = "icons" },
     }, TotemDeckDB.timerStyle or "bars", 260, -20, function(value)
         TotemDeckDB.timerStyle = value
+        -- Rebuild timer position dropdown to show/hide "On Button" option
+        RebuildTimerPosDropdown(value)
         addon.UpdateTimers()
     end)
 
@@ -419,6 +529,16 @@ function addon.CreateConfigWindow()
         { label = "Alt", value = "ALT" },
     }, TotemDeckDB.popupModifier or "NONE", 385, -20, function(value)
         TotemDeckDB.popupModifier = value
+    end)
+
+    frame.timerFontSizeDropdown = CreateDropdown(settingsSection, "Timer Font Size", {
+        { label = "Small", value = "SMALL" },
+        { label = "Normal", value = "NORMAL" },
+        { label = "Large", value = "LARGE" },
+    }, TotemDeckDB.timerFontSize or "NORMAL", 260, -58, function(value)
+        TotemDeckDB.timerFontSize = value
+        addon.UpdateTimerBarFonts()
+        addon.UpdateIconTimerFonts()
     end)
 
     -- Scale slider
@@ -516,6 +636,9 @@ function addon.CreateConfigWindow()
                     container:Hide()
                 else
                     container:SetAlpha(0)
+                end
+                if container.blocker then
+                    container.blocker:EnableMouse(true)
                 end
             end
             -- Re-enable "Disable Popup in Combat" option
@@ -1395,6 +1518,9 @@ local function RefreshConfigWindowState()
     end
     if configWindow.showOOMOverlayCheck then
         configWindow.showOOMOverlayCheck:SetChecked(TotemDeckDB.showLowManaOverlay ~= false)
+    end
+    if configWindow.timerFontSizeDropdown and configWindow.timerFontSizeDropdown.UpdateValue then
+        configWindow.timerFontSizeDropdown.UpdateValue(TotemDeckDB.timerFontSize or "NORMAL")
     end
     -- Sounds tab
     if configWindow.masterSoundCheck then

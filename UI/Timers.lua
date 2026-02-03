@@ -36,15 +36,19 @@ function addon.CreateTimerBar(parent, element, index)
     bar.statusBar = statusBar
 
     -- Text (on statusBar so it renders above the progress color)
+    local fontData = addon.fontSizes[TotemDeckDB.timerFontSize or "NORMAL"]
     local text = statusBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     text:SetPoint("LEFT", 4, 0)
     text:SetTextColor(1, 1, 1)
+    local fontPath = text:GetFont()
+    text:SetFont(fontPath, fontData.size, "OUTLINE")
     bar.text = text
 
     -- Time text (on statusBar so it renders above the progress color)
     local timeText = statusBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     timeText:SetPoint("RIGHT", -2, 0)
     timeText:SetTextColor(1, 1, 1)
+    timeText:SetFont(fontPath, fontData.size, "OUTLINE")
     bar.timeText = timeText
 
     bar.element = element
@@ -92,6 +96,21 @@ function addon.CreateTimerFrame()
     end
 
     timerFrame:Hide()
+end
+
+-- Update timer bar fonts when font size setting changes
+function addon.UpdateTimerBarFonts()
+    local fontData = addon.fontSizes[TotemDeckDB.timerFontSize or "NORMAL"]
+    for element, bar in pairs(addon.UI.timerBars) do
+        if bar.text then
+            local fontPath = bar.text:GetFont()
+            bar.text:SetFont(fontPath, fontData.size, "OUTLINE")
+        end
+        if bar.timeText then
+            local fontPath = bar.timeText:GetFont()
+            bar.timeText:SetFont(fontPath, fontData.size, "OUTLINE")
+        end
+    end
 end
 
 -- Update timer bars

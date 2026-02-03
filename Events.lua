@@ -248,6 +248,14 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
                     btn:EnableMouse(true)
                     btn.visual:EnableMouse(true)
                 end
+                -- Toggle blocker based on popup visibility
+                if container.blocker then
+                    if not addon.state.popupVisible and not TotemDeckDB.alwaysShowPopup then
+                        container.blocker:EnableMouse(true)
+                    else
+                        container.blocker:EnableMouse(false)
+                    end
+                end
             end
         end
 
@@ -271,6 +279,9 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3)
                     btn.visual:EnableMouse(false)
                 end
                 container:Hide()
+                if container.blocker then
+                    container.blocker:EnableMouse(true)
+                end
             end
         end
 

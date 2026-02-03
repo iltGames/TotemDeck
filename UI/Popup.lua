@@ -161,6 +161,9 @@ function addon.ShowPopup(hoveredElement)
         end
         -- Alpha can always be changed, used for combat visibility
         container:SetAlpha(1)
+        if container.blocker then
+            container.blocker:EnableMouse(false)  -- Allow clicks through to buttons
+        end
 
         -- Highlight hovered element, dim others
         if elem == hoveredElement then
@@ -235,8 +238,11 @@ function addon.HidePopup()
         if not addon.HasTotemItem(elem) then
             -- Already hidden by UpdateElementVisibility
         elseif InCombatLockdown() then
-            -- In combat: can't Hide()/SetFrameStrata() on frames with secure children, use alpha instead
+            -- can't Hide() on frames with secure children, use alpha instead
             container:SetAlpha(0)
+            if container.blocker then
+                container.blocker:EnableMouse(true)  -- Block clicks on hidden popup
+            end
         else
             -- Out of combat: actually hide for clean mouse passthrough
             container:EnableMouse(false)
@@ -246,6 +252,9 @@ function addon.HidePopup()
                 btn.visual:EnableMouse(false)
             end
             container:Hide()
+            if container.blocker then
+                container.blocker:EnableMouse(true)
+            end
         end
     end
     GameTooltip:Hide()
@@ -329,7 +338,7 @@ function addon.CreatePopupColumn(element, anchorButton)
         container:SetPoint("LEFT", anchorButton, "RIGHT", 2, 0)
     end
 
-    container:SetFrameStrata("DIALOG") -- Keep at DIALOG so popup is always above timer bars during combat
+    container:SetFrameStrata("DIALOG")  -- Always above timer bars (MEDIUM strata)
 
     container:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -371,6 +380,14 @@ function addon.CreatePopupColumn(element, anchorButton)
         btn:Show()
         addon.UI.popupButtons[element][i] = btn
     end
+
+    -- Create non-secure blocker frame to prevent click-through when popup is hidden
+    -- EnableMouse() is NOT protected on non-secure frames, so this works during combat
+    local blocker = CreateFrame("Frame", nil, container)
+    blocker:SetAllPoints(container)
+    blocker:SetFrameLevel(container:GetFrameLevel() + 100)  -- Above all buttons
+    blocker:EnableMouse(true)  -- Start blocking (popup starts hidden)
+    container.blocker = blocker
 
     return container
 end

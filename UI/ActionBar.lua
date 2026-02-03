@@ -218,6 +218,9 @@ function addon.CreateActionBarFrame()
                         else
                             container:SetAlpha(0)
                         end
+                        if container.blocker then
+                            container.blocker:EnableMouse(true)
+                        end
                     end
                 end
             end
@@ -231,9 +234,12 @@ function addon.CreateActionBarFrame()
         local iconTimer = CreateFrame("Frame", nil, btn)
         iconTimer:SetSize(40, 16)
 
+        local fontData = addon.fontSizes[TotemDeckDB.timerFontSize or "NORMAL"]
         local iconTimerText = iconTimer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         iconTimerText:SetPoint("CENTER")
         iconTimerText:SetTextColor(1, 1, 1)
+        local fontPath, _, fontFlags = iconTimerText:GetFont()
+        iconTimerText:SetFont(fontPath, fontData.size, "OUTLINE")
 
         -- Function to update icon timer position based on timerPosition setting
         local function UpdateIconTimerPosition()
@@ -251,6 +257,9 @@ function addon.CreateActionBarFrame()
             elseif pos == "RIGHT" then
                 iconTimer:SetSize(40, 16)
                 iconTimer:SetPoint("LEFT", btn, "RIGHT", 2, 0)
+            elseif pos == "ON" then
+                iconTimer:SetSize(40, 40)
+                iconTimer:SetPoint("CENTER", btn, "CENTER", 0, 0)
             end
         end
         UpdateIconTimerPosition()
@@ -274,6 +283,17 @@ function addon.CreateActionBarFrame()
 
     -- Initial update of element visibility based on totem items
     addon.UpdateElementVisibility()
+end
+
+-- Update icon timer fonts when font size setting changes
+function addon.UpdateIconTimerFonts()
+    local fontData = addon.fontSizes[TotemDeckDB.timerFontSize or "NORMAL"]
+    for element, btn in pairs(addon.UI.activeTotemButtons) do
+        if btn.iconTimerText then
+            local fontPath = btn.iconTimerText:GetFont()
+            btn.iconTimerText:SetFont(fontPath, fontData.size, "OUTLINE")
+        end
+    end
 end
 
 -- Update visibility of element buttons based on whether player has the required totem item

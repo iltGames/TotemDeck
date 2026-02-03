@@ -16,8 +16,9 @@ addon.defaults = {
     showTimers = true,
     locked = false,
     popupDirection = "UP", -- UP, DOWN, LEFT, RIGHT
-    timerPosition = "ABOVE", -- ABOVE, BELOW, LEFT, RIGHT
+    timerPosition = "ABOVE", -- ABOVE, BELOW, LEFT, RIGHT, ON (ON only for icons style)
     timerStyle = "bars", -- "bars" or "icons"
+    timerFontSize = "NORMAL", -- "SMALL", "NORMAL", "LARGE"
     alwaysShowPopup = false, -- Always show popup bars instead of on hover
     elementOrder = { "Earth", "Fire", "Water", "Air" }, -- Order of element groups
     totemOrder = { -- Custom totem order per element (empty = use default)
@@ -96,6 +97,13 @@ addon.TOTEMS = {
         { spellID = 15107, duration = 120 }, -- Windwall Totem
         { spellID = 3738, duration = 120 },  -- Wrath of Air Totem
     },
+}
+
+-- Font size mapping for timers
+addon.fontSizes = {
+    SMALL = { size = 10 },
+    NORMAL = { size = 12 },
+    LARGE = { size = 14 },
 }
 
 -- Element colors
