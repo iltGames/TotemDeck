@@ -215,9 +215,16 @@ local function CreateDropdown(parent, label, options, currentValue, x, y, onChan
     UpdateText()
 
     -- Dropdown menu
+    local maxVisible = 15
+    local itemHeight = 20
+    local totalHeight = #options * itemHeight + 4
+    local needsScroll = #options > maxVisible
+    local menuHeight = needsScroll and (maxVisible * itemHeight + 4) or totalHeight
+    local menuWidth = needsScroll and 126 or 110  -- wider to fit scrollbar
+
     local menu = CreateFrame("Frame", nil, btn, "BackdropTemplate")
     menu:SetPoint("TOP", btn, "BOTTOM", 0, -2)
-    menu:SetSize(110, #options * 20 + 4)
+    menu:SetSize(menuWidth, menuHeight)
     menu:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -228,10 +235,65 @@ local function CreateDropdown(parent, label, options, currentValue, x, y, onChan
     menu:SetFrameStrata("TOOLTIP")
     menu:Hide()
 
+    -- Parent for items: either a scroll child or the menu itself
+    local itemParent
+    if needsScroll then
+        local scrollFrame = CreateFrame("ScrollFrame", nil, menu)
+        scrollFrame:SetPoint("TOPLEFT", 2, -2)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -18, 2)
+
+        local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+        scrollChild:SetSize(106, totalHeight)
+        scrollFrame:SetScrollChild(scrollChild)
+
+        -- Scrollbar
+        local slider = CreateFrame("Slider", nil, menu, "BackdropTemplate")
+        slider:SetPoint("TOPRIGHT", -2, -2)
+        slider:SetPoint("BOTTOMRIGHT", -2, 2)
+        slider:SetWidth(14)
+        slider:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        slider:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+        slider:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+        slider:SetOrientation("VERTICAL")
+        slider:SetMinMaxValues(0, totalHeight - (menuHeight - 4))
+        slider:SetValue(0)
+        slider:SetValueStep(itemHeight)
+
+        local thumb = slider:CreateTexture(nil, "OVERLAY")
+        thumb:SetColorTexture(0.4, 0.4, 0.4, 0.8)
+        thumb:SetSize(10, 40)
+        slider:SetThumbTexture(thumb)
+
+        slider:SetScript("OnValueChanged", function(self, value)
+            scrollFrame:SetVerticalScroll(value)
+        end)
+
+        local function OnMouseWheel(self, delta)
+            local cur = slider:GetValue()
+            local _, maxVal = slider:GetMinMaxValues()
+            slider:SetValue(math.max(0, math.min(maxVal, cur - delta * itemHeight * 3)))
+        end
+
+        menu:EnableMouseWheel(true)
+        menu:SetScript("OnMouseWheel", OnMouseWheel)
+        scrollFrame:EnableMouseWheel(true)
+        scrollFrame:SetScript("OnMouseWheel", OnMouseWheel)
+        scrollChild:EnableMouseWheel(true)
+        scrollChild:SetScript("OnMouseWheel", OnMouseWheel)
+
+        itemParent = scrollChild
+    else
+        itemParent = menu
+    end
+
     for i, opt in ipairs(options) do
-        local item = CreateFrame("Button", nil, menu)
+        local item = CreateFrame("Button", nil, itemParent)
         item:SetSize(106, 18)
-        item:SetPoint("TOP", menu, "TOP", 0, -2 - (i-1) * 20)
+        item:SetPoint("TOP", itemParent, "TOP", 0, -2 - (i-1) * itemHeight)
         item:SetHighlightTexture("Interface\\Buttons\\WHITE8x8")
         item:GetHighlightTexture():SetVertexColor(0.3, 0.3, 0.5, 0.5)
 
@@ -983,7 +1045,7 @@ function addon.CreateConfigWindow()
     -- Build sound options list for dropdowns
     local soundOptions = {}
     for _, sound in ipairs(addon.EXPIRY_SOUNDS) do
-        table.insert(soundOptions, { label = sound.name, value = sound.id })
+        table.insert(soundOptions, { label = sound.name, value = sound.path or sound.id })
     end
 
     -- Per-element sound dropdowns
@@ -1053,9 +1115,13 @@ function addon.CreateConfigWindow()
         previewBtn:SetPoint("LEFT", dropdown, "RIGHT", 5, 0)
         previewBtn:SetText(">")
         previewBtn:SetScript("OnClick", function()
-            local soundID = TotemDeckDB.totemExpirySoundIDs and TotemDeckDB.totemExpirySoundIDs[element] or 8959
-            if soundID and soundID > 0 then
-                PlaySound(soundID, "Master")
+            local soundValue = TotemDeckDB.totemExpirySoundIDs and TotemDeckDB.totemExpirySoundIDs[element] or 8959
+            if soundValue then
+                if type(soundValue) == "string" then
+                    PlaySoundFile(soundValue, "Master")
+                elseif soundValue > 0 then
+                    PlaySound(soundValue, "Master")
+                end
             end
         end)
         previewBtn:SetScript("OnEnter", function(self)

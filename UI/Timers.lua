@@ -158,9 +158,13 @@ function addon.UpdateTimers()
                     -- Totem expiry sound alert
                     if remaining <= 5 then
                         if TotemDeckDB.totemExpirySound and not addon.state.totemSoundPlayed[slot] then
-                            local soundID = TotemDeckDB.totemExpirySoundIDs and TotemDeckDB.totemExpirySoundIDs[element] or 8959
-                            if soundID and soundID > 0 then
-                                PlaySound(soundID, "Master")
+                            local soundValue = TotemDeckDB.totemExpirySoundIDs and TotemDeckDB.totemExpirySoundIDs[element] or 8959
+                            if soundValue then
+                                if type(soundValue) == "string" then
+                                    PlaySoundFile(soundValue, "Master")
+                                elseif soundValue > 0 then
+                                    PlaySound(soundValue, "Master")
+                                end
                             end
                             addon.state.totemSoundPlayed[slot] = true
                         end

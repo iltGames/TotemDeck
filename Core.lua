@@ -156,6 +156,21 @@ addon.EXPIRY_SOUNDS = {
     { id = 12571, name = "Headless Horseman" },
     { id = 9036, name = "Wolf Howl" },
     { id = 3337, name = "Drum Hit" },
+    -- Game sounds (file path based)
+    { path = "Sound/Creature/Peon/PeonBuildingComplete1.ogg", name = "Peon Work Complete" },
+    { path = "Sound/Interface/iquestupdate.ogg", name = "Quest Update" },
+    { path = "Sound/Interface/AuctionWindowOpen.ogg", name = "Auction Open" },
+    { path = "Sound/Doodad/BoatDockedWarning.ogg", name = "Boat Docked" },
+    { path = "Sound/Doodad/BellTollAlliance.ogg", name = "Bell Toll Alliance" },
+    { path = "Sound/Doodad/BellTollHorde.ogg", name = "Bell Toll Horde" },
+    { path = "Sound/Doodad/Hellfire_Raid_FX_Explosion05.ogg", name = "Explosion" },
+    { path = "Sound/Doodad/PortcullisActive_Closed.ogg", name = "Shing!" },
+    { path = "Sound/Doodad/PVP_Lordaeron_Door_Open.ogg", name = "Wham!" },
+    { path = "Sound/Doodad/SimonGame_LargeBlueTree.ogg", name = "Simon Chime" },
+    { path = "Sound/Event Sounds/Event_wardrum_ogre.ogg", name = "War Drums" },
+    { path = "Sound/Spells/SimonGame_Visual_GameStart.ogg", name = "Humm" },
+    { path = "Sound/Spells/SimonGame_Visual_BadPress.ogg", name = "Short Circuit" },
+    { path = "Sound/Creature/OrcMaleShadyNPC/OrcMaleShadyNPCGreeting05.ogg", name = "Zug Zug" },
 }
 
 -- Totem slot indices (for tracking active totems)
